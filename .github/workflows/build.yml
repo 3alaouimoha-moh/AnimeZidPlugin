@@ -1,37 +1,62 @@
 name: Build
 
+concurrency:
+  group: "build"
+  cancel-in-progress: true
+
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
-  workflow_dispatch:
+    branches:
+      - master
+      - main
+    paths-ignore:
+      - '*.md'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: "src"
+
+      - name: Checkout builds
+        uses: actions/checkout@v4
+        with:
+          ref: "builds"
+          path: "builds"
+
+      - name: Clean old builds
+        run: rm -f $GITHUB_WORKSPACE/builds/*.cs3
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: 'adopt'
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      - name: Build with Gradle
-        run: ./gradlew AnimeZidProvider:make
-      - name: Upload build
-        uses: actions/upload-artifact@v3
-        with:
-          name: plugins
-          path: |
-            builds/
-      - name: Deploy to builds branch
-        uses: s0/git-publish-subdir-action@develop
-        env:
-          REPO: self
-          BRANCH: builds
-          FOLDER: builds
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SKIP_EMPTY_COMMITS: true
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Build Plugins
+        run: |
+          cd $GITHUB_WORKSPACE/src
+          chmod +x gradlew
+          ./gradlew make makePluginsJson
+          find . -name "*.cs3" -exec cp {} $GITHUB_WORKSPACE/builds \;
+          cp -f build/plugins.json $GITHUB_WORKSPACE/builds 2>/dev/null || true
+
+      - name: Generate plugins.json fallback
+        run: |
+          if [ ! -f $GITHUB_WORKSPACE/builds/plugins.json ]; then
+            echo '[{"name":"AnimeZid","version":1,"description":"Anime from animezid.cam","url":"https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/AnimeZidProvider.cs3","iconUrl":"https://animezid.cam/uploads/custom-logo.png","language":"ar","tvTypes":["Anime","Movie","TvSeries"],"authors":["AnimeZid"],"status":1}]' > $GITHUB_WORKSPACE/builds/plugins.json
+          fi
+
+      - name: Push builds
+        run: |
+          cd $GITHUB_WORKSPACE/builds
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions"
+          git add .
+          git commit --amend -m "Build $GITHUB_SHA" || exit 0
+          git push --force
