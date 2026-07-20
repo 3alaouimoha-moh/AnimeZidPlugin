@@ -2,30 +2,14 @@ package com.animezid.cloudstream
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import com.fasterxml.jackson.annotation.JsonProperty
+import org.jsoup.nodes.Element
 import kotlin.math.abs
 
-data class IframeResponse(
-    @JsonProperty("props") val props: IframeProps
-)
-
-data class IframeProps(
-    @JsonProperty("streams") val streams: StreamsData
-)
-
-data class StreamsData(
-    @JsonProperty("data") val data: List<StreamItem>
-)
-
-data class StreamItem(
-    @JsonProperty("mirrors") val mirrors: List<MirrorItem>,
-    @JsonProperty("resolution") val resolution: String
-)
-
-data class MirrorItem(
-    @JsonProperty("driver") val driver: String,
-    @JsonProperty("link") val link: String
-)
+data class IframeResponse(val props: IframeProps)
+data class IframeProps(val streams: StreamsData)
+data class StreamsData(val data: List<StreamItem>)
+data class StreamItem(val mirrors: List<MirrorItem>, val resolution: String)
+data class MirrorItem(val driver: String, val link: String)
 
 class AnimeZidProvider : MainAPI() {
     override var mainUrl = "https://animezid.cam"
