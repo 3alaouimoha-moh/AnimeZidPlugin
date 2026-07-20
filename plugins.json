@@ -1,0 +1,220 @@
+[
+    {
+        "iconUrl": "https://ak.sv/favicon.ico",
+        "fileHash": "sha256-7440287da4cb19a83acacbba8c7126ada0f8df61f97ac4deb13c90474e4a7324",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 20228,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "Akwam"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AsianDrama"
+        ],
+        "version": -1,
+        "internalName": "AkwamProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0623\u0641\u0644\u0627\u0645 \u0648\u0627\u0644\u0645\u0633\u0644\u0633\u0644\u0627\u062a \u0627\u0644\u0645\u062a\u0631\u062c\u0645\u0629 \u0648\u0627\u0644\u0645\u062f\u0628\u0644\u062c\u0629",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/AkwamProvider.cs3",
+        "name": "AkwamProvider"
+    },
+    {
+        "iconUrl": "https://w1.anime4up.rest/favicon.ico",
+        "fileHash": "sha256-7d9990e6244234cf0322b1a2b72580198d55be4ff3e545150d6f0f87f31a990c",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 18672,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "Anime4Up"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": -1,
+        "internalName": "Anime4upProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0623\u0646\u0645\u064a \u0648\u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0627\u0644\u0645\u062f\u0628\u0644\u062c \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/Anime4upProvider.cs3",
+        "name": "Anime4upProvider"
+    },
+    {
+        "iconUrl": "https://animewitcher.com/favicon.ico",
+        "fileHash": "sha256-a3b5b53df7c0df2b39f5fb542c6d1ba02defcc77c2af3dcfcbff8558b8fdb68f",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 32868,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "AnimeWitcher"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": -1,
+        "internalName": "AnimewitcherProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0623\u0646\u0645\u064a \u0627\u0644\u0645\u062a\u0631\u062c\u0645",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/AnimewitcherProvider.cs3",
+        "name": "AnimewitcherProvider"
+    },
+    {
+        "iconUrl": "https://animezid.cam/uploads/custom-logo.png",
+        "fileHash": "sha256-e2e41ff5a4fa2d7e287cefb2e5de20cb31bccb3c28f626d666bc18b3badbf933",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 31824,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "AnimeZid"
+        ],
+        "tvTypes": [
+            "Anime",
+            "Movie",
+            "TvSeries"
+        ],
+        "version": 1,
+        "internalName": "AnimeZidProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0623\u0641\u0644\u0627\u0645 \u0648\u0645\u0633\u0644\u0633\u0644\u0627\u062a \u0627\u0644\u0627\u0646\u0645\u064a \u0648\u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0627\u0644\u0645\u062f\u0628\u0644\u062c \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645 \u0627\u0648\u0646\u0644\u0627\u064a\u0646",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/AnimeZidProvider.cs3",
+        "name": "AnimeZidProvider"
+    },
+    {
+        "iconUrl": "https://cartoony.net/assets/img/default_cover.webp",
+        "fileHash": "sha256-560f2dc6bc9ab0fc3cb37a0dbb64ab289ecb03520a54ea8c405b52cf037ca256",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 24979,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "Cartoony"
+        ],
+        "tvTypes": [
+            "Cartoon",
+            "Movie"
+        ],
+        "version": -1,
+        "internalName": "CartoonyProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0645\u0633\u0644\u0633\u0644\u0627\u062a \u0648\u0623\u0641\u0644\u0627\u0645 \u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0627\u0644\u0645\u062f\u0628\u0644\u062c\u0629 \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645\u0629",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/CartoonyProvider.cs3",
+        "name": "CartoonyProvider"
+    },
+    {
+        "iconUrl": "https://www.dimakids.com/favicon.ico",
+        "fileHash": "sha256-c4599929925fa89ef1e71c43c26181ec2fe5a768b93febf43bc05cf923a6542e",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 14404,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "DimaKids"
+        ],
+        "tvTypes": [
+            "Cartoon",
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": -1,
+        "internalName": "DimaKidsProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0623\u0641\u0644\u0627\u0645 \u0648\u0645\u0633\u0644\u0633\u0644\u0627\u062a \u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0648\u0627\u0644\u0623\u0646\u0645\u064a \u0627\u0644\u0645\u062f\u0628\u0644\u062c\u0629 \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645\u0629",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/DimaKidsProvider.cs3",
+        "name": "DimaKidsProvider"
+    },
+    {
+        "iconUrl": "https://www.dima-toon.com/favicon.ico",
+        "fileHash": "sha256-fa807281bdbfd51ce8c78d3b5938b5edff6a0647715a24c686e371f0566fcdc6",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 11130,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "DimaToon"
+        ],
+        "tvTypes": [
+            "Cartoon"
+        ],
+        "version": -1,
+        "internalName": "DimaToonProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0627\u0644\u0645\u062f\u0628\u0644\u062c \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/DimaToonProvider.cs3",
+        "name": "DimaToonProvider"
+    },
+    {
+        "iconUrl": "https://www.ooanime.com/favicon.ico",
+        "fileHash": "sha256-c178519baaaa831a3968bc0bd20ee6229ef9223e4a68ddc429f6d05dd78024e8",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 22924,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "OOAnime"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie",
+            "Cartoon",
+            "Movie"
+        ],
+        "version": -1,
+        "internalName": "OOAnimeProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0623\u0646\u0645\u064a \u0648\u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0627\u0644\u0645\u062f\u0628\u0644\u062c \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/OOAnimeProvider.cs3",
+        "name": "OOAnimeProvider"
+    },
+    {
+        "iconUrl": "https://www.stardima.com/favicon.ico",
+        "fileHash": "sha256-f2e1b080847bf6195038c9f2bfaeeef9a73752e14522f415d206aa9eaf2d5277",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 26198,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "StarDima"
+        ],
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Cartoon",
+            "Anime",
+            "Live"
+        ],
+        "version": -1,
+        "internalName": "StardimaProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u0645\u062a\u0627\u0628\u0639\u0629 \u0623\u062d\u062f\u062b \u0627\u0644\u0623\u0641\u0644\u0627\u0645 \u0648\u0627\u0644\u0645\u0633\u0644\u0633\u0644\u0627\u062a \u0648\u0627\u0644\u0623\u0646\u0645\u064a \u0648\u0627\u0644\u0642\u0646\u0648\u0627\u062a \u0627\u0644\u0643\u0631\u062a\u0648\u0646\u064a\u0629 \u0628\u062b \u0645\u0628\u0627\u0634\u0631",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/StardimaProvider.cs3",
+        "name": "StardimaProvider"
+    },
+    {
+        "iconUrl": "https://witanime.you/favicon.ico",
+        "fileHash": "sha256-371ab449b46548c16357eb2cdc7214289205b7809f647255201a6c4d9adc37e9",
+        "apiVersion": 1,
+        "repositoryUrl": "https://github.com/3alaouimoha-moh/AnimeZidPlugin",
+        "fileSize": 28887,
+        "status": 1,
+        "language": "ar",
+        "authors": [
+            "WitAnime"
+        ],
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "version": -1,
+        "internalName": "WitanimeProvider",
+        "description": "\u0645\u0634\u0627\u0647\u062f\u0629 \u0648\u062a\u062d\u0645\u064a\u0644 \u0627\u0644\u0623\u0646\u0645\u064a \u0648\u0627\u0644\u0643\u0631\u062a\u0648\u0646 \u0627\u0644\u0645\u062f\u0628\u0644\u062c \u0648\u0627\u0644\u0645\u062a\u0631\u062c\u0645",
+        "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/WitanimeProvider.cs3",
+        "name": "WitanimeProvider"
+    }
+]
