@@ -197,7 +197,8 @@ class AnimeZidProvider : MainAPI() {
             }
 
             for (mirror in stream.mirrors) {
-                val videoUrl = mirror.link.ifBlank { continue }
+                if (mirror.link.isBlank()) continue
+                val videoUrl = mirror.link
                 callback.invoke(
                     newExtractorLink(
                         source = name,
