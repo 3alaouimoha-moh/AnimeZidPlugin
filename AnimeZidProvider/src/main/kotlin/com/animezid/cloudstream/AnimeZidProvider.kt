@@ -111,14 +111,11 @@ class AnimeZidProvider : MainAPI() {
         val seenVids = mutableSetOf<String>()
         val currentVid = Regex("""[?&]vid=([^&]+)""").find(url)?.groupValues?.get(1)
 
-        val seasonTabs = doc.select(".tab-seasons li")
         val episodeContainers = doc.select(".SeasonsEpisodes")
 
-        if (seasonTabs.isNotEmpty() && episodeContainers.isNotEmpty()) {
-            seasonTabs.forEachIndexed { index, seasonTab ->
-                val seasonNum = seasonTab.attr("data-serie").toIntOrNull() ?: (index + 1)
-                val container = episodeContainers.getOrNull(index) ?: return@forEachIndexed
-
+        if (episodeContainers.isNotEmpty()) {
+            episodeContainers.forEachIndexed { index, container ->
+                val seasonNum = container.attr("data-serie").toIntOrNull() ?: (index + 1)
                 container.select("a").forEach { epLink ->
                     val epHref = epLink.attr("href")
                     val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
@@ -135,9 +132,7 @@ class AnimeZidProvider : MainAPI() {
                     }
                 }
             }
-        }
-
-        if (episodes.isEmpty()) {
+        } else {
             val allLinks = doc.select("a[href*=\"watch.php?vid=\"]")
                 .ifEmpty { doc.select("a[href*=\"watch.php\"]") }
             allLinks.forEach { epLink ->
@@ -145,7 +140,7 @@ class AnimeZidProvider : MainAPI() {
                 val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
                 if (epVid != null && epVid != currentVid && seenVids.add(epVid)) {
                     val epNum = Regex("""الحلقة\s*(\d+)""").find(epLink.attr("title").ifEmpty { epLink.text() })
-                        ?.groupValues?.get(1)?.toIntOrNull() ?: episodes.size + 1
+                        ?.groupValues?.get(1)?.toIntOrNull() ?: seenVids.size
                     episodes.add(
                         newEpisode(fixUrl(epHref)) {
                             this.name = "الحلقة $epNum"
