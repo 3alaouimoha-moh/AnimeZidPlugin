@@ -199,16 +199,24 @@ class AnimeZidProvider : MainAPI() {
             for (mirror in stream.mirrors) {
                 if (mirror.link.isBlank()) continue
                 val videoUrl = mirror.link.let { if (it.startsWith("//")) "https:$it" else it }
-                callback.invoke(
-                    newExtractorLink(
-                        source = name,
-                        name = "${mirror.driver} - ${stream.resolution}",
-                        url = videoUrl,
-                    ) {
-                        this.referer = fixedUrl
-                        this.quality = quality
-                    }
+                val extracted = loadExtractor(
+                    url = videoUrl,
+                    referer = fixedUrl,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback,
                 )
+                if (!extracted) {
+                    callback.invoke(
+                        newExtractorLink(
+                            source = name,
+                            name = "${mirror.driver} - ${stream.resolution}",
+                            url = videoUrl,
+                        ) {
+                            this.referer = fixedUrl
+                            this.quality = quality
+                        }
+                    )
+                }
             }
         }
 
