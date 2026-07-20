@@ -111,46 +111,31 @@ class AnimeZidProvider : MainAPI() {
         val seenVids = mutableSetOf<String>()
         val currentVid = Regex("""[?&]vid=([^&]+)""").find(url)?.groupValues?.get(1)
 
-        val episodeContainers = doc.select(".SeasonsEpisodes")
+        val allEpLinks = doc.select("a[href*=\"watch.php?vid=\"]")
+            .ifEmpty { doc.select("a[href*=\"watch.php\"]") }
 
-        if (episodeContainers.isNotEmpty()) {
-            episodeContainers.forEachIndexed { index, container ->
-                val seasonNum = container.attr("data-serie").toIntOrNull() ?: (index + 1)
-                container.select("a").forEach { epLink ->
-                    val epHref = epLink.attr("href")
-                    val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
-                    if (epHref.isNotBlank() && epVid != currentVid && seenVids.add(epVid ?: epHref)) {
-                        val epNum = epLink.select("em").text().trim().toIntOrNull() ?: 0
-                        episodes.add(
-                            newEpisode(fixUrl(epHref)) {
-                                this.name = "الحلقة $epNum"
-                                this.season = seasonNum
-                                this.episode = epNum
-                                this.posterUrl = fixUrl(poster)
-                            }
-                        )
-                    }
+        for (epLink in allEpLinks) {
+            val epHref = epLink.attr("href")
+            val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
+            if (epVid == null || epVid == currentVid || !seenVids.add(epVid)) continue
+
+            val epNum = epLink.select("em").text().trim().toIntOrNull()
+                ?: Regex("""الحلقة\s*(\d+)""").find(epLink.attr("title").ifEmpty { epLink.text() })
+                    ?.groupValues?.get(1)?.toIntOrNull()
+                ?: seenVids.size
+
+            val season = epLink.parents().select("[data-serie]").firstOrNull()
+                ?.attr("data-serie")?.toIntOrNull()
+                ?: 1
+
+            episodes.add(
+                newEpisode(fixUrl(epHref)) {
+                    this.name = "الحلقة $epNum"
+                    this.season = season
+                    this.episode = epNum
+                    this.posterUrl = fixUrl(poster)
                 }
-            }
-        } else {
-            val allLinks = doc.select("a[href*=\"watch.php?vid=\"]")
-                .ifEmpty { doc.select("a[href*=\"watch.php\"]") }
-            allLinks.forEach { epLink ->
-                val epHref = epLink.attr("href")
-                val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
-                if (epVid != null && epVid != currentVid && seenVids.add(epVid)) {
-                    val epNum = Regex("""الحلقة\s*(\d+)""").find(epLink.attr("title").ifEmpty { epLink.text() })
-                        ?.groupValues?.get(1)?.toIntOrNull() ?: seenVids.size
-                    episodes.add(
-                        newEpisode(fixUrl(epHref)) {
-                            this.name = "الحلقة $epNum"
-                            this.season = 1
-                            this.episode = epNum
-                            this.posterUrl = fixUrl(poster)
-                        }
-                    )
-                }
-            }
+            )
         }
 
         if (episodes.isEmpty()) {
