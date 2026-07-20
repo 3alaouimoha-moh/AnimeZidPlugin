@@ -72,6 +72,7 @@ class AnimeZidProvider : MainAPI() {
 
         val title = doc.select("meta[property=og:title]").attr("content")
             .ifEmpty { doc.select("h1 span, .movie_title h1").text() }
+            .ifEmpty { doc.select("title").text() }
             .ifEmpty { throw ErrorLoadingException("Could not find title") }
 
         val poster = doc.select("meta[property=og:image]").attr("content")
@@ -152,22 +153,19 @@ class AnimeZidProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
-        val embedUrls = doc.select("#xservers button[data-embed]").mapNotNull {
-            it.attr("data-embed").trim().ifBlank { null }
-        }.ifEmpty {
-            doc.select("iframe").mapNotNull { it.attr("src").trim().ifBlank { null } }
+        val vid = Regex("""[?&]vid=([^&]+)""").find(data)?.groupValues?.get(1)
+            ?: data.substringAfterLast("/")
+
+        val embedDoc = app.get("$mainUrl/embed.php?vid=$vid").document
+        val iframeSrc = embedDoc.selectFirst("iframe")?.attr("src") ?: return false
+
+        val fixedUrl = when {
+            iframeSrc.startsWith("//") -> "https:$iframeSrc"
+            !iframeSrc.startsWith("http") -> "$mainUrl/$iframeSrc"
+            else -> iframeSrc
         }
 
-        for (embedUrl in embedUrls) {
-            val fixedUrl = when {
-                embedUrl.startsWith("//") -> "https:$embedUrl"
-                !embedUrl.startsWith("http") -> "$mainUrl/$embedUrl"
-                else -> embedUrl
-            }
-            loadExtractor(fixedUrl, subtitleCallback, callback)
-        }
-
+        loadExtractor(fixedUrl, subtitleCallback, callback)
         return true
     }
 }
