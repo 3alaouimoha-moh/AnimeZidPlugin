@@ -56,7 +56,7 @@ class AnimeZidProvider : MainAPI() {
 
         return newAnimeSearchResponse(seriesName, fixUrl(href), tvType) {
             this.posterUrl = fixUrl(posterUrl)
-            this.rating = rating
+            this.score = rating
         }
     }
 
@@ -94,7 +94,7 @@ class AnimeZidProvider : MainAPI() {
                 this.posterUrl = fixUrl(poster)
                 this.year = year
                 this.plot = plot
-                this.rating = rating
+                this.score = rating
                 this.tags = tags
             }
         }
@@ -141,7 +141,7 @@ class AnimeZidProvider : MainAPI() {
             this.posterUrl = fixUrl(poster)
             this.year = year
             this.plot = plot
-            this.rating = rating
+            this.score = rating
             this.tags = tags
         }
     }
