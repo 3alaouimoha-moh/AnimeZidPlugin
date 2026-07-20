@@ -2,7 +2,30 @@ package com.animezid.cloudstream
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import org.jsoup.nodes.Element
+import com.fasterxml.jackson.annotation.JsonProperty
+import kotlin.math.abs
+
+data class IframeResponse(
+    @JsonProperty("props") val props: IframeProps
+)
+
+data class IframeProps(
+    @JsonProperty("streams") val streams: StreamsData
+)
+
+data class StreamsData(
+    @JsonProperty("data") val data: List<StreamItem>
+)
+
+data class StreamItem(
+    @JsonProperty("mirrors") val mirrors: List<MirrorItem>,
+    @JsonProperty("resolution") val resolution: String
+)
+
+data class MirrorItem(
+    @JsonProperty("driver") val driver: String,
+    @JsonProperty("link") val link: String
+)
 
 class AnimeZidProvider : MainAPI() {
     override var mainUrl = "https://animezid.cam"
@@ -165,7 +188,45 @@ class AnimeZidProvider : MainAPI() {
             else -> iframeSrc
         }
 
-        loadExtractor(fixedUrl, subtitleCallback, callback)
+        val pageText = app.get(fixedUrl).text
+        val version = Regex(""""version":"([^"]+)"""").find(pageText)?.groupValues?.get(1)
+            ?: return false
+
+        val inertiaHeaders = mapOf(
+            "X-Inertia" to "true",
+            "X-Inertia-Partial-Component" to "files/mirror/video",
+            "X-Inertia-Partial-Data" to "streams",
+            "X-Inertia-Version" to version
+        )
+
+        val jsonText = app.get(fixedUrl, headers = inertiaHeaders).text
+        val response = AppUtils.tryParseJson<IframeResponse>(jsonText) ?: return false
+
+        val standardQualities = listOf(144, 240, 360, 480, 720, 1080)
+
+        for (stream in response.props.streams.data) {
+            val height = stream.resolution.substringAfter("x").toIntOrNull()
+            val quality = if (height != null) {
+                standardQualities.minByOrNull { abs(it - height) } ?: height
+            } else {
+                Qualities.Unknown.value
+            }
+
+            for (mirror in stream.mirrors) {
+                val videoUrl = mirror.link.ifBlank { continue }
+                callback.invoke(
+                    newExtractorLink(
+                        source = name,
+                        name = "${mirror.driver} - ${stream.resolution}",
+                        url = videoUrl,
+                    ) {
+                        this.referer = fixedUrl
+                        this.quality = quality
+                    }
+                )
+            }
+        }
+
         return true
     }
 }
