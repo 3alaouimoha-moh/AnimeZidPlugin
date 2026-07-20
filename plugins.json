@@ -1,0 +1,13 @@
+[
+  {
+    "name": "AnimeZid",
+    "version": 1,
+    "description": "مشاهدة وتحميل أفلام ومسلسلات الانمي والكرتون المدبلج والمترجم اونلاين",
+    "url": "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/AnimeZidProvider.apk",
+    "iconUrl": "https://animezid.cam/uploads/custom-logo.png",
+    "language": "ar",
+    "tvTypes": ["Anime", "Movie", "TvSeries"],
+    "authors": ["AnimeZid"],
+    "status": 1
+  }
+]

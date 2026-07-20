@@ -1,0 +1,8 @@
+{
+  "name": "AnimeZid Repository",
+  "description": "مشاهدة وتحميل أفلام ومسلسلات الانمي والكرتون من animezid.cam",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/3alaouimoha-moh/AnimeZidPlugin/builds/plugins.json"
+  ]
+}
