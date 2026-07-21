@@ -3,18 +3,17 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
-import com.lagradost.cloudstream3.utils.Qualities
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.getQualityFromName
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+
 class Anime4up : MainAPI() {
     override var mainUrl = "https://w1.anime4up.rest"
     override var name = "Anime4Up"
     override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)
     override var lang = "ar"
     override val hasMainPage = true
+
+    private val mapper = jacksonObjectMapper()
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(mainUrl).document
@@ -62,7 +61,7 @@ class Anime4up : MainAPI() {
             }
         }
 
-        return HomePageResponse(homePageList)
+        return newHomePageResponse(homePageList)
     }
 
 
@@ -163,50 +162,15 @@ class Anime4up : MainAPI() {
             this.year = year
         }
     }
-    @Serializable
-    data class Share4maxMirror(
-        @SerialName("link") val link: String?,
-        @SerialName("driver") val driver: String?
-    )
-
-    @Serializable
-    data class Share4maxQuality(
-        @SerialName("label") val label: String?,
-        @SerialName("mirrors") val mirrors: List<Share4maxMirror>?
-    )
-
-    @Serializable
-    data class Share4maxStreamsData(
-        @SerialName("data") val data: List<Share4maxQuality>?
-    )
-
-    @Serializable
-    data class Share4maxProps(
-        @SerialName("streams") val streams: Share4maxStreamsData?
-    )
-
-    @Serializable
-    data class Share4maxInertiaResponse(
-        @SerialName("props") val props: Share4maxProps?
-    )
-
-    @Serializable
-    data class Share4maxInitialPage(
-        @SerialName("version") val version: String?
-    )
-
-
 
     private suspend fun processMegabox(url: String, referer: String): List<String> {
         val extractedIframes = mutableListOf<String>()
 
         try {
-            val targetUrl = url
-
-            val initialResponse = app.get(targetUrl, referer = referer)
+            val initialResponse = app.get(url, referer = referer)
             val soup = initialResponse.document
             val version = soup.selectFirst("script[data-page=app]")?.html()?.let {
-                parseJson<Share4maxInitialPage>(it).version
+                try { mapper.readValue<Map<String, String>>(it)["version"] } catch (_: Exception) { null }
             }
 
             if (version == null) return emptyList()
@@ -219,12 +183,13 @@ class Anime4up : MainAPI() {
                 "X-Requested-With" to "XMLHttpRequest"
             )
 
-            val streamResponse = app.get(targetUrl, headers = inertiaHeaders, referer = referer)
-            val streamJson = parseJson<Share4maxInertiaResponse>(streamResponse.text)
+            val streamResponse = app.get(url, headers = inertiaHeaders, referer = referer)
+            val json = mapper.readTree(streamResponse.text)
 
-            streamJson.props?.streams?.data?.forEach { qualityLevel ->
-                qualityLevel.mirrors?.forEach { mirror ->
-                    mirror.link?.let { link ->
+            json.get("props")?.get("streams")?.get("data")?.forEach { qualityLevel ->
+                qualityLevel.get("mirrors")?.forEach { mirror ->
+                    val link = mirror.get("link")?.asText()
+                    if (!link.isNullOrBlank()) {
                         val finalUrl = if (link.startsWith("//")) "https:$link" else link
                         extractedIframes.add(finalUrl)
                     }
@@ -236,6 +201,7 @@ class Anime4up : MainAPI() {
 
         return extractedIframes
     }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -246,7 +212,7 @@ class Anime4up : MainAPI() {
 
         val seenLinks = mutableSetOf<String>()
 
-        doc.select("ul#episode-servers li[data-watch]").apmap { li ->
+        doc.select("ul#episode-servers li[data-watch]").forEach { li ->
             val serverUrl = li.attr("data-watch")
 
             val linksToProcess = if (serverUrl.contains("share4max") || serverUrl.contains("megamax")) {
@@ -262,7 +228,7 @@ class Anime4up : MainAPI() {
             }
         }
 
-        doc.select("div.download-list table.table tbody tr").apmap { tr ->
+        doc.select("div.download-list table.table tbody tr").forEach { tr ->
             val downloadLink = tr.selectFirst("td.td-link a")?.attr("href")
 
             if (!downloadLink.isNullOrBlank() && seenLinks.add(downloadLink)) {
