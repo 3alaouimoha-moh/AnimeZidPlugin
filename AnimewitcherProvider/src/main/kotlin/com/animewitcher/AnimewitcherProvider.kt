@@ -96,21 +96,42 @@ class AnimeWitcherProvider : MainAPI() {
         }
     }
 
-    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse = withContext(Dispatchers.IO) {
+    private data class HomeSection(val indexName: String, val title: String, val hitsPerPage: Int)
 
-        refreshAlgoliaKeys()
+    private suspend fun fetchHomeSections(): List<HomeSection> = withContext(Dispatchers.IO) {
+        try {
+            val url = "https://firestore.googleapis.com/v1/projects/$FIREBASE_PROJECT_ID/databases/(default)/documents/Settings/home_sections"
+            val res = app.get(url).text
+            val json = JSONObject(res)
+            val sections = json.optJSONObject("fields")
+                ?.optJSONObject("sections")
+                ?.optJSONObject("arrayValue")
+                ?.optJSONArray("values") ?: JSONArray()
 
-        val indexName = "recent"
-        val pageParam = (page - 1).coerceAtLeast(0)
+            val result = ArrayList<HomeSection>()
+            for (i in 0 until sections.length()) {
+                val f = sections.getJSONObject(i).optJSONObject("mapValue")?.optJSONObject("fields") ?: continue
+                val enabled = f.optJSONObject("enabled")?.optBoolean("booleanValue") ?: false
+                if (!enabled) continue
+                val indexName = f.optJSONObject("index_name")?.optString("stringValue") ?: continue
+                val title = f.optJSONObject("title")?.optString("stringValue") ?: continue
+                val hitsPerPage = f.optJSONObject("hits_per_page")?.optString("integerValue")?.toIntOrNull() ?: 20
+                result.add(HomeSection(indexName, title, hitsPerPage))
+            }
+            return@withContext result
+        } catch (e: Exception) {
+            logd("fetchHomeSections failed: ${e.message}")
+            return@withContext listOf(HomeSection("recent", "أخر التحديثات", 20))
+        }
+    }
 
-        val attributes = URLEncoder.encode("[\"objectID\",\"name\",\"poster_uri\",\"path\",\"type\",\"anime_id\"]", "utf-8")
-        val params = "attributesToRetrieve=$attributes&hitsPerPage=30&page=$pageParam&query="
-
+    private suspend fun queryAlgoliaIndex(indexName: String, hitsPerPage: Int): List<SearchResponse> = withContext(Dispatchers.IO) {
+        val attributes = URLEncoder.encode("[\"objectID\",\"name\",\"poster_uri\",\"path\",\"type\",\"anime_id\",\"anime_id\"]", "utf-8")
+        val params = "attributesToRetrieve=$attributes&hitsPerPage=$hitsPerPage&page=0&query="
         val payload = JSONObject().put("params", params)
         val body = payload.toString().toRequestBody("application/json; charset=UTF-8".toMediaType())
 
         val res = app.post(algoliaUrl(indexName), requestBody = body, headers = getAlgoliaHeaders()).text
-
         val json = try { JSONObject(res) } catch (e: Exception) { JSONObject() }
         val hits = json.optJSONArray("hits") ?: JSONArray()
 
@@ -121,11 +142,25 @@ class AnimeWitcherProvider : MainAPI() {
             if (title.isNullOrEmpty()) continue
             val poster = obj.optString("poster_uri")
             val animeId = obj.optString("anime_id", obj.optString("objectID"))
+            if (animeId.isNullOrEmpty()) continue
             val fullData = URLEncoder.encode(obj.toString(), "utf-8")
             val url = "$mainUrl/watch/${URLEncoder.encode(animeId, "utf-8")}?data=$fullData"
             list.add(newAnimeSearchResponse(title, url, TvType.Anime) { this.posterUrl = poster })
         }
-        return@withContext newHomePageResponse("أحدث الأنميات", list)
+        return@withContext list
+    }
+
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse = withContext(Dispatchers.IO) {
+        refreshAlgoliaKeys()
+        val sections = fetchHomeSections()
+        val homePageList = ArrayList<HomePageList>()
+        for (section in sections) {
+            val items = queryAlgoliaIndex(section.indexName, section.hitsPerPage)
+            if (items.isNotEmpty()) {
+                homePageList.add(HomePageList(section.title, items))
+            }
+        }
+        return@withContext newHomePageResponse(homePageList)
     }
 
     override suspend fun search(query: String): List<SearchResponse> = withContext(Dispatchers.IO) {
