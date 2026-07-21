@@ -41,7 +41,10 @@ subprojects {
     }
 
     android {
-        namespace = "com.animezid.cloudstream"
+        namespace = when (project.name) {
+            "WitanimeProvider" -> "com.witanime"
+            else -> "com.animezid.cloudstream"
+        }
 
         defaultConfig {
             minSdk = 21
