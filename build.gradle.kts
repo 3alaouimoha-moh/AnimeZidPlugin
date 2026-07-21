@@ -44,6 +44,7 @@ subprojects {
         namespace = when (project.name) {
             "WitanimeProvider" -> "com.witanime"
             "Anime4upProvider" -> "com.anime4up"
+            "AnimewitcherProvider" -> "com.animewitcher"
             else -> "com.animezid.cloudstream"
         }
 
