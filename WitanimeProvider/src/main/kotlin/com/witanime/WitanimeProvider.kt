@@ -5,11 +5,11 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.network.WebViewResolver
 import android.util.Base64
 import com.lagradost.cloudstream3.mvvm.logError
+import org.jsoup.Jsoup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -23,6 +23,8 @@ class WitAnime : MainAPI() {
     override val hasMainPage = true
     override var lang = "ar"
     override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie)
+    private val FRAMEWORK_HASH = "23a97133-caf3-4eb4-9466-93d0a4ff8198"
+
     private suspend fun fetchWithJS(url: String): String {
         return try {
             app.get(url, interceptor = WebViewResolver(interceptUrl = Regex(url))).text
@@ -67,9 +69,7 @@ class WitAnime : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val html = fetchWithJS(url)
-        val document = html.let {
-            try { org.jsoup.Jsoup.parse(it) } catch (_: Exception) { org.jsoup.Jsoup.parse("") }
-        }
+        val document = html.let { try { Jsoup.parse(it) } catch (_: Exception) { Jsoup.parse("") } }
         val title = document.selectFirst("h1.anime-details-title")?.text()?.trim() ?: ""
         val poster = document.selectFirst("div.anime-thumbnail img")?.attr("src")
         val description = document.selectFirst("p.anime-story")?.text()?.trim()
@@ -115,276 +115,236 @@ class WitAnime : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val FRAMEWORK_HASH = "23a97133-caf3-4eb4-9466-93d0a4ff8198"
-
-        fun cleanBase64Chars(s: String): String = s.replace(Regex("[^A-Za-z0-9+/=]"), "")
-        fun base64DecodeBytes(input: String?): ByteArray {
-            if (input.isNullOrBlank()) return ByteArray(0)
-            return try { Base64.decode(input, Base64.DEFAULT) } catch (_: Exception) { ByteArray(0) }
-        }
-        fun bytesToStringSafe(bytes: ByteArray): String {
-            if (bytes.isEmpty()) return ""
-            return try { String(bytes, Charsets.UTF_8) } catch (_: Exception) {
-                try { String(bytes, Charset.forName("ISO-8859-1")) } catch (_: Exception) {
-                    bytes.joinToString("") { (it.toInt() and 0xFF).toChar().toString() }
-                }
-            }
-        }
-        fun hexToByteArray(hex: String?): ByteArray {
-            if (hex.isNullOrBlank()) return ByteArray(0)
-            val cleaned = hex.replace(Regex("[^0-9a-fA-F]"), "")
-            if (cleaned.length % 2 != 0) return ByteArray(0)
-            return cleaned.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-        }
-        fun xorWithKey(data: ByteArray, key: ByteArray): ByteArray {
-            if (key.isEmpty()) return data
-            val out = ByteArray(data.size)
-            for (i in data.indices) out[i] = (data[i].toInt() xor key[i % key.size].toInt()).toByte()
-            return out
-        }
-        fun safeTrim(s: String?): String = s?.replace(Regex("[\\x00\\u0000]"), "")?.trim() ?: ""
-
-        suspend fun fetchUrl(url: String): String {
-            return try { app.get(url).text } catch (_: Exception) { "" }
-        }
-
-        fun getParamOffsetFromConfig(config: Any?): Int {
-            if (config == null) return 0
-            return try {
-                if (config is Map<*, *>) {
-                    val k = config["k"] as? String ?: return 0
-                    val d = config["d"]
-                    val idx = bytesToStringSafe(base64DecodeBytes(k)).toIntOrNull() ?: return 0
-                    when (d) {
-                        is List<*> -> (d.getOrNull(idx) as? Number)?.toInt() ?: 0
-                        is Array<*> -> (d.getOrNull(idx) as? Number)?.toInt() ?: 0
-                        else -> 0
-                    }
-                } else if (config is JSONObject) {
-                    val k = config.optString("k", null) ?: return 0
-                    val idx = bytesToStringSafe(base64DecodeBytes(k)).toIntOrNull() ?: return 0
-                    val dArr = config.optJSONArray("d") ?: return 0
-                    dArr.getInt(idx)
-                } else 0
-            } catch (_: Exception) { 0 }
-        }
-
-        fun decodeX18cResource(resourceRaw: Any?, paramOffset: Int): String {
-            var raw: String? = null
-            if (resourceRaw is String) raw = resourceRaw
-            else if (resourceRaw is Map<*, *>) raw = (resourceRaw["r"] ?: resourceRaw["resource"] ?: resourceRaw["data"]) as? String
-            else if (resourceRaw is JSONObject) {
-                raw = when {
-                    resourceRaw.has("r") -> resourceRaw.optString("r", null)
-                    resourceRaw.has("resource") -> resourceRaw.optString("resource", null)
-                    resourceRaw.has("data") -> resourceRaw.optString("data", null)
-                    else -> null
-                }
-            }
-            if (raw.isNullOrBlank()) return ""
-            val rev = raw.reversed()
-            val decodedBytes = try { Base64.decode(cleanBase64Chars(rev), Base64.DEFAULT) } catch (_: Exception) { ByteArray(0) }
-            val slice = if (paramOffset > 0 && paramOffset <= decodedBytes.size) decodedBytes.copyOf(decodedBytes.size - paramOffset) else decodedBytes
-            return safeTrim(bytesToStringSafe(slice))
-        }
-
-        fun parsePx9FromScript(js: String): Triple<String?, List<String>, Map<String, List<String>>> {
-            val mMatch = Regex("""var\s+_m\s*=\s*\{\s*\"r\"\s*:\s*\"([^\"]+)\"""").find(js)
-            val mVal = mMatch?.groupValues?.get(1)
-            val sMatch = Regex("""var\s+_s\s*=\s*\[(.*?)\]\s*;""", RegexOption.DOT_MATCHES_ALL).find(js)
-            val sList = mutableListOf<String>()
-            if (sMatch != null) sList.addAll(Regex("\"([^\"]*)\"").findAll(sMatch.groupValues[1]).map { it.groupValues[1] }.toList())
-            val pMatches = Regex("""var\s+(_p\d+)\s*=\s*\[\s*(.*?)\s*\]\s*;""", RegexOption.DOT_MATCHES_ALL).findAll(js)
-            val pMap = mutableMapOf<String, List<String>>()
-            for (m in pMatches) pMap[m.groupValues[1]] = Regex("\"([^\"]*)\"").findAll(m.groupValues[2]).map { it.groupValues[1] }.toList()
-            return Triple(mVal, sList, pMap)
-        }
-
-        fun processPxChunk(hex: String?, secret: ByteArray): String {
-            val xored = xorWithKey(hexToByteArray(hex), secret)
-            return safeTrim(bytesToStringSafe(xored))
-        }
-
-        fun decryptPx9All(mrBase64: String?, sList: List<String>, pDict: Map<String, List<String>>): List<String> {
-            if (mrBase64.isNullOrBlank()) return emptyList()
-            val secret = try { Base64.decode(mrBase64, Base64.DEFAULT) } catch (_: Exception) { ByteArray(0) }
-            val results = mutableListOf<String>()
-            val count = maxOf(sList.size, pDict.size)
-            for (i in 0 until count) {
-                val key = "_p$i"
-                val chunks = pDict[key] ?: continue
-                val seq: IntArray? = if (i < sList.size) {
-                    try {
-                        val seqDecoded = processPxChunk(sList[i], secret)
-                        val arr = JSONArray(seqDecoded)
-                        IntArray(arr.length()) { idx -> arr.getInt(idx) }
-                    } catch (_: Exception) { null }
-                } else null
-                val decrypted = chunks.map { processPxChunk(it, secret) }
-                val final = if (seq != null && seq.size == decrypted.size) {
-                    val arr = Array(decrypted.size) { "" }
-                    for (j in decrypted.indices) {
-                        val pos = seq[j]
-                        if (pos in arr.indices) arr[pos] = decrypted[j]
-                        else { val idxFallback = arr.indexOfFirst { it.isEmpty() }; if (idxFallback >= 0) arr[idxFallback] = decrypted[j] }
-                    }
-                    arr.joinToString("")
-                } else decrypted.joinToString("")
-                results.add(safeTrim(final))
-            }
-            return results
-        }
-
-        fun findServerElements(html: String): List<Pair<String, String>> {
-            val items = mutableListOf<Pair<String, String>>()
-            val anchorRegex = Regex("""(<a[^>]+class=[\"'][^\"']*server-link[^\"']*[\"'][^>]*>.*?</a>)""", RegexOption.DOT_MATCHES_ALL)
-            for (m in anchorRegex.findAll(html)) {
-                val tag = m.groupValues[1]
-                val sid = Regex("""data-server-id\s*=\s*[\"']([^\"']+)[\"']""").find(tag)?.groupValues?.get(1)
-                val label = Regex("""<span[^>]+class=[\"'][^\"']*ser[^\"']*[\"'][^>]*>(.*?)</span>""", RegexOption.DOT_MATCHES_ALL)
-                    .find(tag)?.groupValues?.get(1)?.replace(Regex("\\s+"), " ")?.trim()
-                if (sid != null) items.add(sid to (label ?: "server-$sid"))
-            }
-            return items
-        }
-
         return try {
-            var html = fetchWithJS(data)
-
-            var zG: String? = Regex("""var\s+_zG\s*=\s*\"([^\"]+)\"""").find(html)?.groupValues?.get(1)
-            var zH: String? = Regex("""var\s+_zH\s*=\s*\"([^\"]+)\"""").find(html)?.groupValues?.get(1)
-
-            if (zG.isNullOrBlank() || zH.isNullOrBlank()) {
-                val inlineScripts = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL).findAll(html)
-                    .map { it.groupValues[1] }.toList()
-                for (s in inlineScripts) {
-                    if (zG.isNullOrBlank()) zG = Regex("""var\s+_zG\s*=\s*\"([^\"]+)\"""").find(s)?.groupValues?.get(1)
-                    if (zH.isNullOrBlank()) zH = Regex("""var\s+_zH\s*=\s*\"([^\"]+)\"""").find(s)?.groupValues?.get(1)
-                    if (!zG.isNullOrBlank() && !zH.isNullOrBlank()) break
-                }
-            }
-
-            if (zG.isNullOrBlank() || zH.isNullOrBlank()) {
-                val scriptSrcs = Regex("""<script[^>]+src=[\"']([^\"']+)[\"'][^>]*>""", RegexOption.IGNORE_CASE).findAll(html)
-                    .map { it.groupValues[1] }.toList()
-                for (src in scriptSrcs) {
-                    val srcUrl = if (src.startsWith("http")) src else try { java.net.URL(java.net.URL(data), src).toString() } catch (_: Exception) { src }
-                    val jsText = fetchUrl(srcUrl)
-                    if (zG.isNullOrBlank()) zG = Regex("""var\s+_zG\s*=\s*\"([^\"]+)\"""").find(jsText)?.groupValues?.get(1)
-                    if (zH.isNullOrBlank()) zH = Regex("""var\s+_zH\s*=\s*\"([^\"]+)\"""").find(jsText)?.groupValues?.get(1)
-                    if (!zG.isNullOrBlank() && !zH.isNullOrBlank()) break
-                }
-            }
-
-            val resourceRegistryObj: Any? = try {
-                val dec = bytesToStringSafe(base64DecodeBytes(zG))
-                try { JSONObject(dec) } catch (_: Exception) { try { JSONArray(dec) } catch (_: Exception) { null } }
-            } catch (_: Exception) { null }
-
-            val configRegistryObj: Any? = try {
-                val dec = bytesToStringSafe(base64DecodeBytes(zH))
-                try { JSONObject(dec) } catch (_: Exception) { try { JSONArray(dec) } catch (_: Exception) { null } }
-            } catch (_: Exception) { null }
-
-            val servers = findServerElements(html)
-            val PARALLELISM = 6
-            val semaphore = Semaphore(PARALLELISM)
-
-            fun lookupRegistry(reg: Any?, sid: String): Any? {
-                if (reg == null) return null
-                return try {
-                    when (reg) {
-                        is JSONObject -> if (reg.has(sid)) reg.get(sid) else sid.toIntOrNull()?.let { if (reg.has(it.toString())) reg.get(it.toString()) else null }
-                        is JSONArray -> sid.toIntOrNull()?.let { if (it >= 0 && it < reg.length()) reg.get(it) else null }
-                        is Map<*, *> -> reg[sid] ?: reg[sid.toIntOrNull()]
-                        else -> null
-                    }
-                } catch (_: Exception) { null }
-            }
-
-            supervisorScope {
-                val tasks: List<Deferred<Unit>> = servers.map { (sid, _) ->
-                    async(Dispatchers.IO) {
-                        semaphore.withPermit {
-                            try {
-                                val resourceRaw = lookupRegistry(resourceRegistryObj, sid)
-                                val configRaw = lookupRegistry(configRegistryObj, sid)
-                                val paramOffset = getParamOffsetFromConfig(configRaw)
-                                var link = decodeX18cResource(resourceRaw, paramOffset)
-                                if (link.matches(Regex("""^https:\/\/yonaplay\.net\/embed\.php\?id=\d+$"""))) link = "$link&apiKey=$FRAMEWORK_HASH"
-                                if (link.isNotBlank()) {
-                                    if (link.contains("yonaplay.net", ignoreCase = true)) {
-                                        try { decodeYonaplayAndLoad(link, subtitleCallback, callback) } catch (_: Exception) {}
-                                    } else {
-                                        try {
-                                            when {
-                                                link.contains("videa.hu", ignoreCase = true) -> {
-                                                    launch(Dispatchers.IO) { try { VideaExtractor().getUrl(link, null, subtitleCallback, callback) } catch (_: Exception) {} }
-                                                    try { loadExtractor(link, subtitleCallback, callback) } catch (_: Exception) {}
-                                                }
-                                                link.contains("my.mail.ru", ignoreCase = true) || link.contains("/video/embed/") -> {
-                                                    launch(Dispatchers.IO) { try { MailruExtractor().getUrl(link, null, subtitleCallback, callback) } catch (_: Exception) {} }
-                                                    try { loadExtractor(link, subtitleCallback, callback) } catch (_: Exception) {}
-                                                }
-                                                else -> try { loadExtractor(link, mainUrl, subtitleCallback, callback) } catch (_: Exception) {}
-                                            }
-                                        } catch (_: Exception) {}
-                                    }
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    }
-                }
-                tasks.awaitAll()
-            }
-
-            var px_mr: String? = null
-            var px_s: List<String> = emptyList()
-            val px_p = mutableMapOf<String, List<String>>()
-
-            val inlineScripts = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL).findAll(html)
-                .map { it.groupValues[1] }
-            for (s in inlineScripts) {
-                if ("_m" in s && "_p0" in s) { val (mVal, sList, pMap) = parsePx9FromScript(s); px_mr = mVal ?: px_mr; if (sList.isNotEmpty()) px_s = sList; px_p.putAll(pMap); if (!px_mr.isNullOrBlank() && px_p.isNotEmpty()) break }
-            }
-
-            if (px_p.isEmpty() || px_mr.isNullOrBlank()) {
-                val scriptSrcs = Regex("""<script[^>]+src=[\"']([^\"']+)[\"'][^>]*>""", RegexOption.IGNORE_CASE).findAll(html)
-                    .map { it.groupValues[1] }.toList()
-                for (src in scriptSrcs) {
-                    val srcUrl = if (src.startsWith("http")) src else try { java.net.URL(java.net.URL(data), src).toString() } catch (_: Exception) { src }
-                    val js = fetchUrl(srcUrl); if (js.isBlank()) continue
-                    if (px_p.isEmpty() || px_mr.isNullOrBlank()) { val (mVal2, sList2, pMap2) = parsePx9FromScript(js); if (mVal2 != null && px_mr.isNullOrBlank()) px_mr = mVal2; if (sList2.isNotEmpty() && px_s.isEmpty()) px_s = sList2; if (pMap2.isNotEmpty()) px_p.putAll(pMap2); if (!px_mr.isNullOrBlank() && px_p.isNotEmpty()) break }
-                }
-            }
-
-            if (px_p.isEmpty()) { val (mVal3, sList3, pMap3) = parsePx9FromScript(html); if (mVal3 != null) px_mr = mVal3; if (sList3.isNotEmpty()) px_s = sList3; if (pMap3.isNotEmpty()) px_p.putAll(pMap3) }
-
-            val downloadLinks = decryptPx9All(px_mr, px_s, px_p)
-
-            supervisorScope {
-                val dlTasks: List<Deferred<Unit>> = downloadLinks.mapIndexed { _, dl ->
-                    async(Dispatchers.IO) {
-                        semaphore.withPermit {
-                            try {
-                                if (dl.isNotBlank()) {
-                                    val httpIndex = dl.indexOf("http")
-                                    val cleaned = if (httpIndex >= 0) dl.substring(httpIndex) else dl
-                                    val finalUrl = safeTrim(cleaned)
-                                    if (finalUrl.startsWith("http")) try { loadExtractor(finalUrl, data, subtitleCallback, callback) } catch (_: Exception) {}
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    }
-                }
-                dlTasks.awaitAll()
-            }
-
+            val html = fetchWithJS(data)
+            processStreamingServers(html, subtitleCallback, callback)
+            processDownloadLinks(html, data, subtitleCallback, callback)
             true
         } catch (_: Exception) { false }
     }
 
-    private suspend fun decodeYonaplayAndLoad(
+    private suspend fun processStreamingServers(
+        html: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val resourceRegistry = extractJsObject(html, "resourceRegistry")
+        val configRegistry = extractJsObject(html, "configRegistry")
+        if (resourceRegistry == null || resourceRegistry.length() == 0) return
+
+        val serverIds = mutableListOf<String>()
+        resourceRegistry.keys().forEach { serverIds.add(it) }
+
+        if (serverIds.isEmpty()) return
+
+        val PARALLELISM = 6
+        val semaphore = Semaphore(PARALLELISM)
+
+        supervisorScope {
+            val tasks = serverIds.map { sid ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        try {
+                            val resourceRaw = resourceRegistry.opt(sid)
+                            val configRaw = if (configRegistry != null) configRegistry.opt(sid) else null
+                            val offset = getParamOffset(configRaw)
+                            var link = decodeX18c(resourceRaw, offset)
+                            if (link.matches(Regex("""^https:\/\/yonaplay\.net\/embed\.php\?id=\d+$"""))) {
+                                link = "$link&apiKey=$FRAMEWORK_HASH"
+                            }
+                            if (link.isNotBlank()) {
+                                when {
+                                    link.contains("yonaplay.net", ignoreCase = true) -> decodeYonaplay(link, subtitleCallback, callback)
+                                    link.contains("videa.hu", ignoreCase = true) -> {
+                                        launch(Dispatchers.IO) { try { VideaExtractor().getUrl(link, null, subtitleCallback, callback) } catch (_: Exception) {} }
+                                        try { loadExtractor(link, subtitleCallback, callback) } catch (_: Exception) {}
+                                    }
+                                    link.contains("my.mail.ru", ignoreCase = true) || link.contains("/video/embed/") -> {
+                                        launch(Dispatchers.IO) { try { MailruExtractor().getUrl(link, null, subtitleCallback, callback) } catch (_: Exception) {} }
+                                        try { loadExtractor(link, subtitleCallback, callback) } catch (_: Exception) {}
+                                    }
+                                    else -> loadExtractor(link, mainUrl, subtitleCallback, callback)
+                                }
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+            tasks.awaitAll()
+        }
+    }
+
+    private suspend fun processDownloadLinks(
+        html: String, data: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val pxScripts = Regex("""<script[^>]*>(.*?)</script>""", RegexOption.DOT_MATCHES_ALL).findAll(html)
+            .map { it.groupValues[1] }.filter { "_m" in it && "_p0" in it }.toList()
+
+        var pxMr: String? = null
+        var pxS = mutableListOf<String>()
+        val pxP = mutableMapOf<String, List<String>>()
+
+        for (s in pxScripts) {
+            val mM = Regex("""(?:window\.)?_m\s*=\s*\{\s*\"r\"\s*:\s*\"([^\"]+)\"""").find(s)
+            if (mM != null && pxMr.isNullOrBlank()) pxMr = mM.groupValues[1]
+            val sM = Regex("""(?:window\.)?_s\s*=\s*\[(.*?)\]\s*;""", RegexOption.DOT_MATCHES_ALL).find(s)
+            if (sM != null && pxS.isEmpty()) pxS.addAll(
+                Regex("\"([^\"]*)\"").findAll(sM.groupValues[1]).map { it.groupValues[1] }
+            )
+            val pMatches = Regex("""(?:window\.)?(_p\d+)\s*=\s*\[\s*(.*?)\s*\]\s*;""", RegexOption.DOT_MATCHES_ALL).findAll(s)
+            for (pm in pMatches) pxP.putIfAbsent(
+                pm.groupValues[1],
+                Regex("\"([^\"]*)\"").findAll(pm.groupValues[2]).map { it.groupValues[1] }.toList()
+            )
+            if (!pxMr.isNullOrBlank() && pxP.isNotEmpty()) break
+        }
+
+        if (pxMr.isNullOrBlank() || pxP.isEmpty()) {
+            val srcs = Regex("""<script[^>]+src=[\"']([^\"']+)[\"'][^>]*>""", RegexOption.IGNORE_CASE).findAll(html)
+                .map { it.groupValues[1] }.toList()
+            for (src in srcs) {
+                val url = if (src.startsWith("http")) src else try {
+                    java.net.URL(java.net.URL(data), src).toString()
+                } catch (_: Exception) { src }
+                val js = try { app.get(url).text } catch (_: Exception) { "" }
+                if (js.isBlank()) continue
+                val mM = Regex("""(?:window\.)?_m\s*=\s*\{\s*\"r\"\s*:\s*\"([^\"]+)\"""").find(js)
+                if (mM != null && pxMr.isNullOrBlank()) pxMr = mM.groupValues[1]
+                val sM = Regex("""(?:window\.)?_s\s*=\s*\[(.*?)\]\s*;""", RegexOption.DOT_MATCHES_ALL).find(js)
+                if (sM != null && pxS.isEmpty()) pxS.addAll(
+                    Regex("\"([^\"]*)\"").findAll(sM.groupValues[1]).map { it.groupValues[1] }
+                )
+                val pMatches = Regex("""(?:window\.)?(_p\d+)\s*=\s*\[\s*(.*?)\s*\]\s*;""", RegexOption.DOT_MATCHES_ALL).findAll(js)
+                for (pm in pMatches) pxP.putIfAbsent(
+                    pm.groupValues[1],
+                    Regex("\"([^\"]*)\"").findAll(pm.groupValues[2]).map { it.groupValues[1] }.toList()
+                )
+                if (!pxMr.isNullOrBlank() && pxP.isNotEmpty()) break
+            }
+        }
+
+        val downloadLinks = decryptPx9(pxMr, pxS, pxP)
+        val PARALLELISM = 6
+        val semaphore = Semaphore(PARALLELISM)
+
+        supervisorScope {
+            val dlTasks = downloadLinks.map { dl ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        try {
+                            if (dl.isNotBlank()) {
+                                val httpIdx = dl.indexOf("http")
+                                val cleaned = if (httpIdx >= 0) dl.substring(httpIdx) else dl
+                                val finalUrl = cleaned.replace(Regex("[\\x00\\u0000]"), "").trim()
+                                if (finalUrl.startsWith("http")) loadExtractor(finalUrl, data, subtitleCallback, callback)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+            dlTasks.awaitAll()
+        }
+    }
+
+    private fun extractJsObject(html: String, varName: String): JSONObject? {
+        val idx = html.indexOf("$varName =")
+        if (idx < 0) return null
+        val start = html.indexOf('{', idx)
+        if (start < 0) return null
+        var depth = 0
+        var end = -1
+        for (i in start until html.length) {
+            when (html[i]) {
+                '{' -> depth++
+                '}' -> { depth--; if (depth == 0) { end = i + 1; break } }
+            }
+        }
+        if (end < 0) return null
+        return try { JSONObject(html.substring(start, end)) } catch (_: Exception) { null }
+    }
+
+    private fun getParamOffset(config: Any?): Int {
+        if (config == null) return 0
+        return try {
+            val k = when (config) {
+                is JSONObject -> config.optString("k", null)
+                is Map<*, *> -> config["k"] as? String
+                else -> null
+            } ?: return 0
+            val idx = String(Base64.decode(k, Base64.DEFAULT), Charsets.UTF_8).trim { it <= ' ' }.toIntOrNull() ?: return 0
+            val d = when (config) {
+                is JSONObject -> config.optJSONArray("d")
+                is Map<*, *> -> (config["d"] as? List<*>)
+                else -> null
+            }
+            when (d) {
+                is JSONArray -> d.optInt(idx, 0)
+                is List<*> -> (d.getOrNull(idx) as? Number)?.toInt() ?: 0
+                else -> 0
+            }
+        } catch (_: Exception) { 0 }
+    }
+
+    private fun decodeX18c(resource: Any?, offset: Int): String {
+        val raw = when (resource) {
+            is String -> resource
+            is JSONObject -> resource.optString("r") ?: resource.optString("resource") ?: resource.optString("data")
+            is Map<*, *> -> (resource["r"] as? String) ?: (resource["resource"] as? String) ?: (resource["data"] as? String)
+            else -> null
+        } ?: return ""
+        val rev = raw.reversed()
+        val clean = rev.replace(Regex("[^A-Za-z0-9+/=]"), "")
+        val dec = try { Base64.decode(clean, Base64.DEFAULT) } catch (_: Exception) { ByteArray(0) }
+        if (dec.isEmpty()) return ""
+        val slice = if (offset > 0 && offset < dec.size) dec.copyOf(dec.size - offset) else dec
+        val str = try { String(slice, Charsets.UTF_8) } catch (_: Exception) { String(slice, Charset.forName("ISO-8859-1")) }
+        return str.replace(Regex("[\\x00\\u0000]"), "").trim()
+    }
+
+    private fun decryptPx9(mrBase64: String?, sList: List<String>, pDict: Map<String, List<String>>): List<String> {
+        if (mrBase64.isNullOrBlank()) return emptyList()
+        val secret = try { Base64.decode(mrBase64, Base64.DEFAULT) } catch (_: Exception) { ByteArray(0) }
+        if (secret.isEmpty()) return emptyList()
+        val results = mutableListOf<String>()
+        val count = maxOf(sList.size, pDict.size)
+        for (i in 0 until count) {
+            val key = "_p$i"
+            val chunks = pDict[key] ?: continue
+            val seq: IntArray? = if (i < sList.size) {
+                try {
+                    val seqDecoded = processPxChunk(sList[i], secret)
+                    val arr = JSONArray(seqDecoded)
+                    IntArray(arr.length()) { arr.getInt(it) }
+                } catch (_: Exception) { null }
+            } else null
+            val decrypted = chunks.map { processPxChunk(it, secret) }
+            val result = if (seq != null && seq.size == decrypted.size) {
+                val arr = Array(decrypted.size) { "" }
+                for (j in decrypted.indices) {
+                    val pos = seq[j]
+                    if (pos in arr.indices) arr[pos] = decrypted[j]
+                    else { val f = arr.indexOfFirst { it.isEmpty() }; if (f >= 0) arr[f] = decrypted[j] }
+                }
+                arr.joinToString("")
+            } else decrypted.joinToString("")
+            results.add(result.replace(Regex("[\\x00\\u0000]"), "").trim())
+        }
+        return results
+    }
+
+    private fun processPxChunk(hex: String?, secret: ByteArray): String {
+        if (hex.isNullOrBlank()) return ""
+        val h = hex.replace(Regex("[^0-9a-fA-F]"), "")
+        if (h.length % 2 != 0) return ""
+        val bytes = h.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        val xored = ByteArray(bytes.size) { (bytes[it].toInt() xor secret[it % secret.size].toInt()).toByte() }
+        val str = try { String(xored, Charsets.UTF_8) } catch (_: Exception) { try { String(xored, Charset.forName("ISO-8859-1")) } catch (_: Exception) { "" } }
+        return str.replace(Regex("[\\x00\\u0000]"), "").trim()
+    }
+
+    private suspend fun decodeYonaplay(
         yonaplayUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
