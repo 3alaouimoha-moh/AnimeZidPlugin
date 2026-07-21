@@ -213,7 +213,17 @@ class AnimeZidProvider : MainAPI() {
             else -> iframeSrc
         }
 
-        val pageText = app.get(fixedUrl).text
+        val extracted = loadExtractor(
+            url = fixedUrl,
+            referer = "$mainUrl/embed.php?vid=$vid",
+            subtitleCallback = subtitleCallback,
+            callback = callback,
+        )
+        if (extracted) return true
+
+        if (!fixedUrl.contains("megamax.me")) return false
+
+        val pageText = try { app.get(fixedUrl).text } catch (_: Exception) { return false }
         val version = Regex(""""version":"([^"]+)"""").find(pageText)?.groupValues?.get(1)
             ?: return false
 
@@ -224,7 +234,7 @@ class AnimeZidProvider : MainAPI() {
             "X-Inertia-Version" to version
         )
 
-        val jsonText = app.get(fixedUrl, headers = inertiaHeaders).text
+        val jsonText = try { app.get(fixedUrl, headers = inertiaHeaders).text } catch (_: Exception) { return false }
         val response = AppUtils.tryParseJson<IframeResponse>(jsonText) ?: return false
 
         val standardQualities = listOf(144, 240, 360, 480, 720, 1080)
@@ -240,13 +250,13 @@ class AnimeZidProvider : MainAPI() {
             for (mirror in stream.mirrors) {
                 if (mirror.link.isBlank()) continue
                 val videoUrl = mirror.link.let { if (it.startsWith("//")) "https:$it" else it }
-                val extracted = loadExtractor(
+                val mirrorExtracted = loadExtractor(
                     url = videoUrl,
                     referer = fixedUrl,
                     subtitleCallback = subtitleCallback,
                     callback = callback,
                 )
-                if (!extracted) {
+                if (!mirrorExtracted) {
                     callback.invoke(
                         newExtractorLink(
                             source = name,
