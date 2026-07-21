@@ -111,10 +111,11 @@ class AnimeZidProvider : MainAPI() {
         val seenVids = mutableSetOf<String>()
         val currentVid = Regex("""[?&]vid=([^&]+)""").find(url)?.groupValues?.get(1)
 
-        val allEpLinks = doc.select("a[href*=\"watch.php?vid=\"]")
+        val episodeLinks = doc.select("a.movie[href*=\"watch.php?vid=\"]")
+            .ifEmpty { doc.select("a[href*=\"watch.php?vid=\"]") }
             .ifEmpty { doc.select("a[href*=\"watch.php\"]") }
 
-        for (epLink in allEpLinks) {
+        for (epLink in episodeLinks) {
             val epHref = epLink.attr("href")
             val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
             if (epVid == null || epVid == currentVid || !seenVids.add(epVid)) continue
@@ -134,6 +135,43 @@ class AnimeZidProvider : MainAPI() {
                     this.season = season
                     this.episode = epNum
                     this.posterUrl = fixUrl(poster)
+                }
+            )
+        }
+
+        if (episodes.isEmpty()) {
+            val subCats = doc.select("a.movie[href*=\"category.php\"]")
+            for (sub in subCats) {
+                val subUrl = fixUrl(sub.attr("href"))
+                try {
+                    val subDoc = app.get(subUrl).document
+                    val subLinks = subDoc.select("a.movie[href*=\"watch.php?vid=\"]")
+                        .ifEmpty { subDoc.select("a[href*=\"watch.php?vid=\"]") }
+                    for (epLink in subLinks) {
+                        val epHref = epLink.attr("href")
+                        val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
+                        if (epVid == null || !seenVids.add(epVid)) continue
+                        val epNum = Regex("""الحلقة\s*(\d+)""").find(epLink.attr("title").ifEmpty { epLink.text() })
+                            ?.groupValues?.get(1)?.toIntOrNull() ?: seenVids.size
+                        episodes.add(
+                            newEpisode(fixUrl(epHref)) {
+                                this.name = "الحلقة $epNum"
+                                this.season = 1
+                                this.episode = epNum
+                                this.posterUrl = fixUrl(poster)
+                            }
+                        )
+                    }
+                } catch (_: Exception) { }
+            }
+        }
+
+        if (episodes.isEmpty()) {
+            episodes.add(
+                newEpisode(url) {
+                    this.name = title
+                    this.season = 1
+                    this.episode = 1
                 }
             )
         }
