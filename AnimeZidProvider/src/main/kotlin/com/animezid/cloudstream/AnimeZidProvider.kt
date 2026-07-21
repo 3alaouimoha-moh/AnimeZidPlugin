@@ -22,8 +22,15 @@ class AnimeZidProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         Pair("anime", "الأنمي"),
-        Pair("movies", "الأفلام"),
-        Pair("series", "المسلسلات"),
+        Pair("new-movies", "أحدث الافلام المضافة"),
+        Pair("dubbed-animation", "أفلام انيميشن مدبلجة"),
+        Pair("subbed-animation", "أفلام انيميشن مترجمة"),
+        Pair("english-movies", "أفلام أجنبية"),
+        Pair("dubbed-movies", "أفلام لايف اكشن مدبلجة"),
+        Pair("dubbed-anime", "مسلسلات انمي مدبلجة"),
+        Pair("disney-series", "مسلسلات ديزني"),
+        Pair("translated-anime", "مسلسلات انيميشن مترجمة"),
+        Pair("cartoon", "مسلسلات كرتون"),
         Pair("disney-masr", "ديزني بالمصري"),
         Pair("spacetoon", "سبيستون"),
         Pair("newvideos", "أحدث الإضافات"),
@@ -33,25 +40,10 @@ class AnimeZidProvider : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val url = "$mainUrl/category.php?cat=${request.data}" + if (page > 1) "&page=$page" else ""
         val doc = app.get(url).document
-        val links = doc.select("a.movie")
+        val items = doc.select("a.movie")
             .ifEmpty { doc.select("a[href*=\"watch.php?vid=\"]") }
-        val items = links.mapNotNull { it.toSearchResponse() }.distinctBy { it.url }
-        if (links.none { it.attr("href").contains("watch.php?vid=") } && links.isNotEmpty()) {
-            val allItems = mutableListOf<SearchResponse>()
-            val seen = mutableSetOf<String>()
-            for (link in links) {
-                val subUrl = fixUrl(link.attr("href"))
-                try {
-                    val subDoc = app.get(subUrl).document
-                    val subLinks = subDoc.select("a.movie[href*=\"watch.php?vid=\"]")
-                    for (sub in subLinks) {
-                        val sr = sub.toSearchResponse() ?: continue
-                        if (seen.add(sr.url)) allItems.add(sr)
-                    }
-                } catch (_: Exception) { }
-            }
-            return newHomePageResponse(request.name, allItems)
-        }
+            .mapNotNull { it.toSearchResponse() }
+            .distinctBy { it.url }
         return newHomePageResponse(request.name, items)
     }
 
