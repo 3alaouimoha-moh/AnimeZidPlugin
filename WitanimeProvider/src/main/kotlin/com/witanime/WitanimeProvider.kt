@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -59,7 +60,7 @@ class WitAnime : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val document = app.get(url, interceptor = WebViewResolver(interceptUrl = Regex(url))).document
+        val document = app.get(url).document
         val title = document.selectFirst("h1.anime-details-title")?.text()?.trim() ?: ""
         val poster = document.selectFirst("div.anime-thumbnail img")?.attr("src")
         val description = document.selectFirst("p.anime-story")?.text()?.trim()
