@@ -2,6 +2,7 @@ package com.witanime
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import com.lagradost.cloudstream3.network.WebViewResolver
 import android.util.Base64
 import com.lagradost.cloudstream3.mvvm.logError
 import kotlinx.coroutines.Dispatchers
@@ -22,19 +23,11 @@ class WitAnime : MainAPI() {
     override val hasMainPage = true
     override var lang = "ar"
     override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie)
-    private val userAgent = "Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Mobile Safari/537.36"
-
     private suspend fun fetchWithJS(url: String): String {
         return try {
-            val clazz = Class.forName("com.lagradost.cloudstream3.network.WebViewResolver")
-            val ctor = clazz.getConstructor(Regex::class.java)
-            val interceptor = ctor.newInstance(Regex(url))
-            val getMethod = app::class.java.getMethod("get", String::class.java, String::class.java, Map::class.java, clazz)
-            val result = getMethod.invoke(app, url, null, mapOf<String, String>(), interceptor)
-            val textMethod = result.javaClass.getMethod("getText")
-            textMethod.invoke(result) as? String ?: ""
+            app.get(url, interceptor = WebViewResolver(interceptUrl = Regex(url))).text
         } catch (_: Exception) {
-            try { app.get(url, headers = mapOf("User-Agent" to userAgent)).text } catch (_: Exception) { "" }
+            try { app.get(url).text } catch (_: Exception) { "" }
         }
     }
 
