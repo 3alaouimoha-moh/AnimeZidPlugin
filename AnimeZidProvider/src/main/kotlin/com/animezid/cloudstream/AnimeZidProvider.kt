@@ -111,9 +111,9 @@ class AnimeZidProvider : MainAPI() {
         val seenVids = mutableSetOf<String>()
         val currentVid = Regex("""[?&]vid=([^&]+)""").find(url)?.groupValues?.get(1)
 
-        val episodeLinks = doc.select("a.movie[href*=\"watch.php?vid=\"]")
-            .ifEmpty { doc.select("a[href*=\"watch.php?vid=\"]") }
-            .ifEmpty { doc.select("a[href*=\"watch.php\"]") }
+        val episodeLinks = doc.select("#movies a.movie[href*=\"watch.php?vid=\"]")
+            .ifEmpty { doc.select(".SeasonsEpisodes a[href*=\"watch.php?vid=\"]") }
+            .ifEmpty { doc.select("a.movie[href*=\"watch.php?vid=\"]") }
 
         for (epLink in episodeLinks) {
             val epHref = epLink.attr("href")
@@ -145,8 +145,9 @@ class AnimeZidProvider : MainAPI() {
                 val subUrl = fixUrl(sub.attr("href"))
                 try {
                     val subDoc = app.get(subUrl).document
-                    val subLinks = subDoc.select("a.movie[href*=\"watch.php?vid=\"]")
-                        .ifEmpty { subDoc.select("a[href*=\"watch.php?vid=\"]") }
+                    val subLinks = subDoc.select("#movies a.movie[href*=\"watch.php?vid=\"]")
+                        .ifEmpty { subDoc.select(".SeasonsEpisodes a[href*=\"watch.php?vid=\"]") }
+                        .ifEmpty { subDoc.select("a.movie[href*=\"watch.php?vid=\"]") }
                     for (epLink in subLinks) {
                         val epHref = epLink.attr("href")
                         val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
@@ -164,16 +165,6 @@ class AnimeZidProvider : MainAPI() {
                     }
                 } catch (_: Exception) { }
             }
-        }
-
-        if (episodes.isEmpty()) {
-            episodes.add(
-                newEpisode(url) {
-                    this.name = title
-                    this.season = 1
-                    this.episode = 1
-                }
-            )
         }
 
         if (episodes.isEmpty()) {
