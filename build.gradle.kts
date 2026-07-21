@@ -43,6 +43,7 @@ subprojects {
     android {
         namespace = when (project.name) {
             "WitanimeProvider" -> "com.witanime"
+            "Anime4upProvider" -> "com.anime4up"
             else -> "com.animezid.cloudstream"
         }
 
