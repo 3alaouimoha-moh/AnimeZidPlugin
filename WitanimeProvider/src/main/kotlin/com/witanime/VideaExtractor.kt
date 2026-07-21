@@ -4,8 +4,6 @@ import android.net.Uri
 import android.util.Base64
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import org.jsoup.parser.Parser
 import java.nio.charset.StandardCharsets
@@ -98,14 +96,12 @@ class VideaExtractor : ExtractorApi() {
             val sorted = collected.sortedWith(compareByDescending<Triple<Int, String, String>> { it.first }
                 .thenByDescending { Regex("(\\d{3,4})").find(it.second)?.groupValues?.get(1)?.toIntOrNull() ?: 0 })
 
-            withContext(Dispatchers.Main) {
-                for ((qualityVal, name, finalUrl) in sorted) {
-                    try {
-                        callback.invoke(newExtractorLink(source = this@VideaExtractor.name, name = "$name (Videa)", url = finalUrl,
-                            type = if (finalUrl.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                        ) { this.referer = referer ?: iframeSrc; this.quality = qualityVal })
-                    } catch (_: Exception) {}
-                }
+            for ((qualityVal, name, finalUrl) in sorted) {
+                try {
+                    callback.invoke(newExtractorLink(source = this@VideaExtractor.name, name = "$name (Videa)", url = finalUrl,
+                        type = if (finalUrl.contains(".m3u8", ignoreCase = true)) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                    ) { this.referer = referer ?: iframeSrc; this.quality = qualityVal })
+                } catch (_: Exception) {}
             }
         } catch (_: Exception) {}
     }

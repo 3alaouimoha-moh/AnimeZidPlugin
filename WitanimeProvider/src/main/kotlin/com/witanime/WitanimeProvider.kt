@@ -4,8 +4,8 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import android.util.Base64
 import com.lagradost.cloudstream3.mvvm.logError
-import com.lagradost.cloudstream3.network.WebViewResolver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
@@ -44,7 +44,7 @@ class WitAnime : MainAPI() {
             if (items.isNotEmpty()) homePageList.add(HomePageList(title, items))
         }
 
-        return HomePageResponse(homePageList)
+        return newHomePageResponse(homePageList)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -307,7 +307,7 @@ class WitAnime : MainAPI() {
             }
 
             supervisorScope {
-                val tasks = servers.map { (sid, label) ->
+                val tasks: List<Deferred<Unit>> = servers.map { (sid, _) ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             try {
@@ -385,7 +385,7 @@ class WitAnime : MainAPI() {
             val downloadLinks = decryptPx9All(px_mr, px_s, px_p)
 
             supervisorScope {
-                val dlTasks = downloadLinks.mapIndexed { _, dl ->
+                val dlTasks: List<Deferred<Unit>> = downloadLinks.mapIndexed { _, dl ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             try {
