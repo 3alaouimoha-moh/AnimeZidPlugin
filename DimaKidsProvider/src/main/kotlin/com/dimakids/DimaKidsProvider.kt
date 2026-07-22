@@ -82,14 +82,19 @@ class DimaKidsProvider : MainAPI() {
 
     override suspend fun search(query: String): List<SearchResponse> {
         val results = ArrayList<SearchResponse>()
+        val q = query.lowercase()
 
-        val seriesDoc = app.get("$mainUrl/cartoon.php?s=${java.net.URLEncoder.encode(query, "utf-8")}").document
-        results.addAll(seriesDoc.select("a[href*=-anime-streaming.html]").mapNotNull { it.toSearchResult() })
+        for (page in 1..3) {
+            val seriesDoc = app.get("$mainUrl/cartoon.php?next=$page").document
+            results.addAll(seriesDoc.select("a[href*=-anime-streaming.html]").mapNotNull { it.toSearchResult() })
+        }
 
-        val moviesDoc = app.get("$mainUrl/movies.php?s=${java.net.URLEncoder.encode(query, "utf-8")}").document
-        results.addAll(moviesDoc.select("a[href*=-movies-streaming.html]").mapNotNull { it.toSearchResult() })
+        for (page in 1..3) {
+            val moviesDoc = app.get("$mainUrl/movies.php?next=$page").document
+            results.addAll(moviesDoc.select("a[href*=-movies-streaming.html]").mapNotNull { it.toSearchResult() })
+        }
 
-        return results.distinctBy { it.url }
+        return results.distinctBy { it.url }.filter { it.name.lowercase().contains(q) }
     }
 
     override suspend fun load(url: String): LoadResponse? {
