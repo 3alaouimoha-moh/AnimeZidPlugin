@@ -86,7 +86,7 @@ class DimaKidsProvider : MainAPI() {
             val href = a.attr("href")
             if (href.isBlank() || !href.contains("-streaming")) return@mapNotNull null
             val title = a.selectFirst("h3.result-title")?.text()?.trim()
-                ?: a.selectFirst("img")?.attr("alt")?.trim().ifBlank { null }
+                ?: a.selectFirst("img")?.attr("alt")?.trim()?.ifBlank { null }
                 ?: return@mapNotNull null
             val img = a.selectFirst("img")?.attr("src")
             val type = if (href.contains("-movies-streaming")) TvType.AnimeMovie else TvType.Cartoon
