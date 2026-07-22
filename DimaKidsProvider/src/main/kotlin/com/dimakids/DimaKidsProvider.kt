@@ -8,27 +8,63 @@ class DimaKidsProvider : MainAPI() {
     override var name = "DimaKids"
     override val hasMainPage = true
     override var lang = "ar"
-    override val supportedTypes = setOf(TvType.Cartoon, TvType.Anime, TvType.AnimeMovie)
+    override val supportedTypes = setOf(TvType.Cartoon, TvType.Anime, TvType.AnimeMovie, TvType.Episode)
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        if (page > 1) return newHomePageResponse(request.name, emptyList())
-
         val homePageList = ArrayList<HomePageList>()
 
-        if (request.data == "series") {
-            val doc = app.get("$mainUrl/cartoon.php?next=1").document
-            val items = doc.select("a[href*=-anime-streaming.html]").mapNotNull { it.toSearchResult() }
-            if (items.isNotEmpty()) homePageList.add(HomePageList(request.name, items))
-        } else if (request.data == "movies") {
-            val doc = app.get("$mainUrl/movies.php?next=1").document
-            val items = doc.select("a[href*=-movies-streaming.html]").mapNotNull { it.toSearchResult() }
-            if (items.isNotEmpty()) homePageList.add(HomePageList(request.name, items))
+        when (request.data) {
+            "series" -> {
+                val doc = app.get("$mainUrl/cartoon.php?next=$page").document
+                val items = doc.select("a[href*=-anime-streaming.html]").mapNotNull { it.toSearchResult() }
+                if (items.isNotEmpty()) homePageList.add(HomePageList(request.name, items))
+            }
+            "movies" -> {
+                val doc = app.get("$mainUrl/movies.php?next=$page").document
+                val items = doc.select("a[href*=-movies-streaming.html]").mapNotNull { it.toSearchResult() }
+                if (items.isNotEmpty()) homePageList.add(HomePageList(request.name, items))
+            }
+            "home" -> {
+                if (page > 1) return newHomePageResponse(emptyList())
+                val doc = app.get("$mainUrl/").document
+                val headings = doc.select("h2, h3")
+                for (heading in headings) {
+                    val sectionTitle = heading.text().trim()
+                    val swiper = heading.nextElementSibling()?.let {
+                        it.selectFirst("div[class*=swiper]")
+                            ?: it.nextElementSibling()?.selectFirst("div[class*=swiper]")
+                    } ?: continue
+
+                    val items = when {
+                        sectionTitle.contains("الحلقات") -> {
+                            swiper.select("a[href]").mapNotNull { a ->
+                                val href = a.attr("href")
+                                val url = href.substringBefore("#").ifBlank { return@mapNotNull null }
+                                val title = a.selectFirst("p, img[alt]")?.attr("alt")
+                                    ?: a.attr("title").ifBlank { null }
+                                    ?: return@mapNotNull null
+                                val img = a.selectFirst("img")?.attr("src")
+                                newAnimeSearchResponse(title, url, TvType.Episode) { this.posterUrl = img }
+                            }
+                        }
+                        sectionTitle.contains("مسلسلات") -> {
+                            swiper.select("a[href*=-anime-streaming.html]").mapNotNull { it.toSearchResult() }
+                        }
+                        sectionTitle.contains("أفلام") -> {
+                            swiper.select("a[href*=-movies-streaming.html]").mapNotNull { it.toSearchResult() }
+                        }
+                        else -> emptyList()
+                    }
+                    if (items.isNotEmpty()) homePageList.add(HomePageList(sectionTitle, items))
+                }
+            }
         }
 
         return newHomePageResponse(homePageList)
     }
 
     override val mainPage = mainPageOf(
+        "home" to "الرئيسية",
         "series" to "المسلسلات",
         "movies" to "الأفلام"
     )
@@ -59,6 +95,15 @@ class DimaKidsProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse? {
         val fullUrl = if (url.startsWith("http")) url else "$mainUrl/$url"
         val doc = app.get(fullUrl).document
+
+        if (!fullUrl.contains("-streaming")) {
+            val title = doc.selectFirst("title")?.text()?.substringBefore("|")?.substringBefore("-")?.trim()
+                ?: doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
+                ?: return null
+            return newMovieLoadResponse(title, fullUrl, TvType.Episode, fullUrl) {
+                this.posterUrl = doc.selectFirst("img[src*=files.dimakids]")?.attr("src")
+            }
+        }
 
         if (fullUrl.contains("-movies-streaming")) {
             val title = doc.selectFirst("title")?.text()?.substringBefore("|")?.trim() ?: return null
