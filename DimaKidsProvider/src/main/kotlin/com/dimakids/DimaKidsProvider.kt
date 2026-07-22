@@ -119,8 +119,8 @@ class DimaKidsProvider : MainAPI() {
                 url = finalUrl,
             ) {
                 referer = mainUrl
-                quality = if (finalUrl.contains("720")) Qualities.SevenHundredTwentyP.value
-                    else if (finalUrl.contains("1080")) Qualities.OneThousandEightyP.value
+                quality = if (finalUrl.contains("1080")) 1080
+                    else if (finalUrl.contains("720")) 720
                     else Qualities.Unknown.value
             }
         )
