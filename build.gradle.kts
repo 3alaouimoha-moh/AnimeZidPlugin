@@ -45,6 +45,7 @@ subprojects {
             "WitanimeProvider" -> "com.witanime"
             "Anime4upProvider" -> "com.anime4up"
             "AnimewitcherProvider" -> "com.animewitcher"
+            "DimaToonProvider" -> "com.dima"
             else -> "com.animezid.cloudstream"
         }
 
