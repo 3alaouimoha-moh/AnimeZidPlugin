@@ -8,7 +8,7 @@ class DimaKidsProvider : MainAPI() {
     override var name = "DimaKids"
     override val hasMainPage = true
     override var lang = "ar"
-    override val supportedTypes = setOf(TvType.Cartoon, TvType.Anime, TvType.AnimeMovie, TvType.Episode)
+    override val supportedTypes = setOf(TvType.Cartoon, TvType.Anime, TvType.AnimeMovie)
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val homePageList = ArrayList<HomePageList>()
@@ -44,7 +44,7 @@ class DimaKidsProvider : MainAPI() {
                                     ?: a.attr("title").ifBlank { null }
                                     ?: return@mapNotNull null
                                 val img = a.selectFirst("img")?.attr("src")
-                                newAnimeSearchResponse(title, url, TvType.Episode) { this.posterUrl = img }
+                                newAnimeSearchResponse(title, url, TvType.Anime) { this.posterUrl = img }
                             }
                         }
                         sectionTitle.contains("مسلسلات") -> {
@@ -100,7 +100,7 @@ class DimaKidsProvider : MainAPI() {
             val title = doc.selectFirst("title")?.text()?.substringBefore("|")?.substringBefore("-")?.trim()
                 ?: doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
                 ?: return null
-            return newMovieLoadResponse(title, fullUrl, TvType.Episode, fullUrl) {
+            return newMovieLoadResponse(title, fullUrl, TvType.Anime, fullUrl) {
                 this.posterUrl = doc.selectFirst("img[src*=files.dimakids]")?.attr("src")
             }
         }
