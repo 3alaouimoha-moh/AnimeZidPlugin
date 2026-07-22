@@ -81,20 +81,17 @@ class DimaKidsProvider : MainAPI() {
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
-        val results = ArrayList<SearchResponse>()
-        val q = query.lowercase()
-
-        for (page in 1..3) {
-            val seriesDoc = app.get("$mainUrl/cartoon.php?next=$page").document
-            results.addAll(seriesDoc.select("a[href*=-anime-streaming.html]").mapNotNull { it.toSearchResult() })
+        val doc = app.get("$mainUrl/search_results.php?q=${java.net.URLEncoder.encode(query, "utf-8")}").document
+        return doc.select("a.result-card").mapNotNull { a ->
+            val href = a.attr("href")
+            if (href.isBlank() || !href.contains("-streaming")) return@mapNotNull null
+            val title = a.selectFirst("h3.result-title")?.text()?.trim()
+                ?: a.selectFirst("img")?.attr("alt")?.trim().ifBlank { null }
+                ?: return@mapNotNull null
+            val img = a.selectFirst("img")?.attr("src")
+            val type = if (href.contains("-movies-streaming")) TvType.AnimeMovie else TvType.Cartoon
+            newAnimeSearchResponse(title, href, type) { this.posterUrl = img }
         }
-
-        for (page in 1..3) {
-            val moviesDoc = app.get("$mainUrl/movies.php?next=$page").document
-            results.addAll(moviesDoc.select("a[href*=-movies-streaming.html]").mapNotNull { it.toSearchResult() })
-        }
-
-        return results.distinctBy { it.url }.filter { it.name.lowercase().contains(q) }
     }
 
     override suspend fun load(url: String): LoadResponse? {
