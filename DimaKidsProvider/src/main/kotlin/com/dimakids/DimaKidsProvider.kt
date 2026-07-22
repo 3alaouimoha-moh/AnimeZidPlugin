@@ -73,7 +73,8 @@ class DimaKidsProvider : MainAPI() {
         val title = doc.selectFirst("title")?.text()?.substringBefore("|")?.substringBefore("-")?.trim() ?: return null
         val poster = doc.selectFirst("img[src*=files.dimakids]")?.attr("src")
         val plot = doc.selectFirst("meta[name=description]")?.attr("content")
-        val seriesId = url.substringAfterLast("-").substringBefore("-anime-streaming").ifBlank { null }
+        val seriesBase = url.substringBeforeLast("-anime-streaming")
+        val seriesId = seriesBase.substringAfterLast("-").ifBlank { null }
 
         val episodes = doc.select("div.episode-item").mapNotNull { el ->
             val epId = el.attr("data-episode-id")
@@ -81,10 +82,11 @@ class DimaKidsProvider : MainAPI() {
             val thumb = el.selectFirst("img")?.attr("src")
             if (epId.isNullOrBlank()) return@mapNotNull null
             val epUrl = if (seriesId != null && url.contains("-anime-streaming")) {
-                val hash = url.substringBeforeLast("-")
+                val hash = seriesBase.substringBeforeLast("-")
                 "$hash-$seriesId-$epId.html"
             } else {
-                "${url.dropLastWhile { it != '/' }}${epId}.html"
+                val base = fullUrl.substringBeforeLast("/")
+                "$base/$epId.html"
             }
             newEpisode(epUrl) {
                 name = "الحلقة ${epNum ?: epId}"
