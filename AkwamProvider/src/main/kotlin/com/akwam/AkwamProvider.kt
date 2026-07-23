@@ -214,6 +214,13 @@ class AkwamProvider : MainAPI() {
         return 999
     }
 
+    private fun buildWatchUrl(episodeUrl: String, pageId: String): String {
+        // episode: https://akwam.it/episode/{id}/{slug}
+        // watch:   https://akwam.it/watch/{id}/{pageId}/{slug}
+        val id = Regex("/episode/(\\d+)").find(episodeUrl)?.groupValues?.get(1) ?: return ""
+        return episodeUrl.replace("/episode/$id", "/watch/$id/$pageId")
+    }
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -223,13 +230,12 @@ class AkwamProvider : MainAPI() {
         try {
             val step1Doc = app.get(data).document
 
-            val watchPath = step1Doc.selectFirst("a.link-show")?.attr("abs:href")?.ifBlank { null }
-                ?: return false
             val pageId = step1Doc.selectFirst("input#page_id")?.attr("value")?.ifBlank { null }
                 ?: step1Doc.selectFirst("input#page_id")?.attr("data-value")
                 ?: return false
 
-            val watchUrl = "${watchPath.trimEnd('/')}/$pageId"
+            val watchUrl = buildWatchUrl(data, pageId)
+                .ifBlank { return false }
 
             val step2Doc = try {
                 app.get(watchUrl).document
@@ -239,8 +245,10 @@ class AkwamProvider : MainAPI() {
 
             val seen = mutableSetOf<String>()
             for (srcEl in step2Doc.select("source[src]")) {
-                val videoUrl = srcEl.attr("abs:src").ifBlank { srcEl.attr("src") }.trim()
-                if (videoUrl.isBlank() || !seen.add(videoUrl)) continue
+                val rawUrl = srcEl.attr("abs:src").ifBlank { srcEl.attr("src") }.trim()
+                if (rawUrl.isBlank()) continue
+                val videoUrl = rawUrl.replace(" ", "%20").replace("https://", "http://")
+                if (!seen.add(videoUrl)) continue
                 val qualityAttr = srcEl.attr("size").ifBlank { srcEl.attr("label") }.ifBlank { "direct" }
                 callback(newExtractorLink(name, name, videoUrl) {
                     this.referer = data
