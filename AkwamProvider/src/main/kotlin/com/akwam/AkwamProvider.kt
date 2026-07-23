@@ -56,7 +56,7 @@ class AkwamProvider : MainAPI() {
                 } catch (_: Exception) { }
             }
             if (homeList.isEmpty()) throw ErrorLoadingException()
-            return HomePageResponse(homeList)
+            return newHomePageResponse(homeList)
         }
 
         val base = request.data.trim()
@@ -71,7 +71,7 @@ class AkwamProvider : MainAPI() {
         val doc = app.get(pageUrl).document
         val list = doc.select("div.col-lg-auto.col-md-4.col-6").mapNotNull { newSearchResult(it) }
         if (list.isEmpty()) throw ErrorLoadingException()
-        return HomePageResponse(listOf(HomePageList(request.name ?: "قائمة", list)))
+        return newHomePageResponse(listOf(HomePageList(request.name ?: "قائمة", list)))
     }
 
     override val mainPage = mainPageOf(
@@ -98,7 +98,8 @@ class AkwamProvider : MainAPI() {
             ?: mainDoc.selectFirst("meta[name=description]")?.attr("content")?.trim()
 
         val rating = mainDoc.selectFirst("span.mx-2:contains(/)")
-            ?.text()?.substringAfter("/")?.trim()?.toRatingInt()
+            ?.text()?.substringAfter("/")?.trim()?.toFloatOrNull()
+        val score = rating?.let { Score.from10(it) }
 
         val tags = mainDoc.select("div.font-size-16.text-white a[href*='/genre/'], div.font-size-16.text-white a[href*='/category/']")
             .map { it.text() }
@@ -136,7 +137,7 @@ class AkwamProvider : MainAPI() {
                 this.plot = plot
                 this.year = year
                 this.tags = tags
-                this.rating = rating
+                this.score = score
                 this.recommendations = recommendations
             }
         }
@@ -170,7 +171,7 @@ class AkwamProvider : MainAPI() {
                 this.plot = plot
                 this.year = year
                 this.tags = tags
-                this.rating = rating
+                this.score = score
                 this.recommendations = recommendations
             }
         }
@@ -180,7 +181,7 @@ class AkwamProvider : MainAPI() {
             this.plot = plot
             this.year = year
             this.tags = tags
-            this.rating = rating
+            this.score = score
             this.recommendations = recommendations
         }
     }
