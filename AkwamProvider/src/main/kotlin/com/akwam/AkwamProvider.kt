@@ -253,6 +253,7 @@ class AkwamProvider : MainAPI() {
                 callback(newExtractorLink(name, name, videoUrl) {
                     this.referer = data
                     this.quality = getQualityFromName(qualityAttr)
+                    this.type = ExtractorLinkType.VIDEO
                 })
             }
             return seen.isNotEmpty()
