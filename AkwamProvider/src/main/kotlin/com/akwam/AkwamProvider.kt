@@ -115,8 +115,7 @@ class AkwamProvider : MainAPI() {
         }
 
         val seasonsMap = linkedMapOf<String, Pair<String, String>>()
-        val currentSeasonName = mainDoc.selectFirst("h1.entry-title")?.text()?.trim() ?: title
-        seasonsMap[pageUrl] = Pair(currentSeasonName, pageUrl)
+        seasonsMap[pageUrl] = Pair("1", pageUrl)
 
         mainDoc.select("div.widget-body > a.btn[href*='/series/']").forEach { a ->
             val href = a.attr("href")
@@ -214,13 +213,6 @@ class AkwamProvider : MainAPI() {
         return 999
     }
 
-    private fun buildWatchUrl(episodeUrl: String, pageId: String): String {
-        // episode: https://akwam.it/episode/{id}/{slug}
-        // watch:   https://akwam.it/watch/{id}/{pageId}/{slug}
-        val id = Regex("/episode/(\\d+)").find(episodeUrl)?.groupValues?.get(1) ?: return ""
-        return episodeUrl.replace("/episode/$id", "/watch/$id/$pageId")
-    }
-
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -228,23 +220,17 @@ class AkwamProvider : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         try {
-            val step1Doc = app.get(data).document
+            val epDoc = app.get(data).document
+            val watchUrl = epDoc.selectFirst("a[href*='/watch/']")?.attr("abs:href") ?: return false
 
-            val pageId = step1Doc.selectFirst("input#page_id")?.attr("value")?.ifBlank { null }
-                ?: step1Doc.selectFirst("input#page_id")?.attr("data-value")
-                ?: return false
-
-            val watchUrl = buildWatchUrl(data, pageId)
-                .ifBlank { return false }
-
-            val step2Doc = try {
+            val watchDoc = try {
                 app.get(watchUrl).document
             } catch (_: Exception) {
                 app.get(watchUrl, headers = mapOf("Referer" to data)).document
             }
 
             val seen = mutableSetOf<String>()
-            for (srcEl in step2Doc.select("source[src]")) {
+            for (srcEl in watchDoc.select("source[src]")) {
                 val rawUrl = srcEl.attr("abs:src").ifBlank { srcEl.attr("src") }.trim()
                 if (rawUrl.isBlank()) continue
                 val videoUrl = rawUrl.replace(" ", "%20").replace("https://", "http://")
