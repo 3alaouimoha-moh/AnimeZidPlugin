@@ -6,7 +6,7 @@ import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
 class AkwamProvider : MainAPI() {
-    override var mainUrl = "https://ak.sv"
+    override var mainUrl = "https://akwam.it"
     override var name = "أكوام"
     override val hasMainPage = true
     override var lang = "ar"
@@ -223,17 +223,13 @@ class AkwamProvider : MainAPI() {
         try {
             val step1Doc = app.get(data).document
 
-            val watchPath = step1Doc.selectFirst("a.link-show")?.attr("href")?.ifBlank { null }
-                ?: step1Doc.selectFirst("a.link-show")?.attr("abs:href")
+            val watchPath = step1Doc.selectFirst("a.link-show")?.attr("abs:href")?.ifBlank { null }
                 ?: return false
             val pageId = step1Doc.selectFirst("input#page_id")?.attr("value")?.ifBlank { null }
                 ?: step1Doc.selectFirst("input#page_id")?.attr("data-value")
                 ?: return false
 
-            val watchSuffix = watchPath.substringAfter("watch", watchPath).trim()
-            val watchUrl = "${mainUrl.trimEnd('/')}/watch${watchSuffix.trimEnd('/')}/$pageId"
-                .replace("//watch", "/watch")
-                .replace(":/", "://")
+            val watchUrl = "${watchPath.trimEnd('/')}/$pageId"
 
             val step2Doc = try {
                 app.get(watchUrl).document
