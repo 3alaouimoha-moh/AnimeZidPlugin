@@ -60,13 +60,14 @@ class AkwamProvider : MainAPI() {
         }
 
         val base = request.data.trim()
+        val fullBase = if (base.startsWith("http")) base else "$mainUrl$base"
         val pageUrl = if (page > 1) {
             when {
-                base.endsWith("/page/") -> "$base$page/"
-                base.contains("?") -> "$base&page=$page"
-                else -> "$base?page=$page"
+                fullBase.endsWith("/page/") -> "$fullBase$page/"
+                fullBase.contains("?") -> "$fullBase&page=$page"
+                else -> "$fullBase?page=$page"
             }
-        } else base
+        } else fullBase
 
         val doc = app.get(pageUrl).document
         val list = doc.select("div.col-lg-auto.col-md-4.col-6").mapNotNull { newSearchResult(it) }
