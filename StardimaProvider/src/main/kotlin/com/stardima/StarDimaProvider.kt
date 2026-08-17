@@ -27,7 +27,7 @@ class StarDimaProvider : MainAPI() {
 
     companion object {
         private const val MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
-        private val UA_HEADERS = mapOf("User-Agent" to MOBILE_UA)
+        private val UA_HEADERS = mapOf("user-agent" to MOBILE_UA)
         private val XHR_HEADERS = mapOf("X-Requested-With" to "XMLHttpRequest")
     }
 
@@ -236,6 +236,7 @@ class StarDimaProvider : MainAPI() {
                     if (frame.contains("$hw/watch/")) resolveHwWatch(frame, subtitleCallback, callback)
                     else resolveStreamUrl(frame, subtitleCallback, callback)
                 }
+                data.contains("elahmad.com") -> resolveElahmad(data, subtitleCallback, callback)
                 else -> resolveStreamUrl(data, subtitleCallback, callback)
             }
         } catch (_: Exception) {
@@ -248,7 +249,7 @@ class StarDimaProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(watchUrl, headers = mapOf("Referer" to mainUrl)).document
+        val doc = app.get(watchUrl, headers = mapOf("user-agent" to MOBILE_UA, "Referer" to mainUrl)).document
         val pageData = doc.selectFirst("#app")?.attr("data-page") ?: return false
         val root = try { mapper.readTree(pageData) } catch (_: Exception) { return false }
         val hashid = root.path("props").path("video").path("hashid").asText()
@@ -300,6 +301,29 @@ class StarDimaProvider : MainAPI() {
         }
     }
 
+    private suspend fun resolveElahmad(
+        url: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val html = app.get(url, headers = UA_HEADERS).text
+        var found = false
+        Regex("""https?://[^"'\s<>]+\.m3u8(?:[^"'\s<>]*)""").findAll(html).forEach { m ->
+            val file = m.value
+            if (file.isNotBlank() && !file.contains("playerjs")) {
+                callback.invoke(
+                    newExtractorLink(source = name, name = "$name - Live", url = file) {
+                        this.referer = url
+                        this.quality = getQualityFromName("Original")
+                        this.type = ExtractorLinkType.M3U8
+                    }
+                )
+                found = true
+            }
+        }
+        return found
+    }
+
     private suspend fun crackStrema(
         embedUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit,
@@ -312,7 +336,7 @@ class StarDimaProvider : MainAPI() {
                 app.post(
                     "$strema/api/",
                     requestBody = kaken.toRequestBody("text/plain; charset=UTF-8".toMediaType()),
-                    headers = mapOf("Referer" to embedUrl, "Content-Type" to "text/plain")
+                    headers = mapOf("Referer" to embedUrl)
                 ).text
             )
         } catch (_: Exception) {
