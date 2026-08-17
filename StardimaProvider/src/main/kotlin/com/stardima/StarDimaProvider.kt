@@ -34,6 +34,7 @@ class StarDimaProvider : MainAPI() {
 
     override val mainPage = mainPageOf(
         "" to "الرئيسية",
+        "newrelases" to "المضاف حديثا",
         "aflam" to "أفلام",
         "mosalsalat" to "مسلسلات",
         "live" to "بث المباشر"
@@ -46,6 +47,16 @@ class StarDimaProvider : MainAPI() {
                 val items = fetchListing(request.data, page)
                 if (items.isEmpty()) throw ErrorLoadingException()
                 list.add(HomePageList(request.name ?: "قائمة", items))
+                return newHomePageResponse(list)
+            }
+            "newrelases" -> {
+                if (page > 1) return newHomePageResponse(emptyList())
+                val doc = app.get("$mainUrl/newrelases").document
+                val items = doc.select("div.grid.grid-cols-2 div.flex.flex-col.px-2")
+                    .mapNotNull { it.videoCardResponse() }
+                    .distinctBy { it.url }
+                if (items.isEmpty()) throw ErrorLoadingException()
+                list.add(HomePageList(request.name ?: "المضاف حديثا", items))
                 return newHomePageResponse(list)
             }
             "live" -> {
