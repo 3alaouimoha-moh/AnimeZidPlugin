@@ -47,6 +47,7 @@ subprojects {
             "AnimewitcherProvider" -> "com.animewitcher"
             "DimaToonProvider" -> "com.dima"
             "DimaKidsProvider" -> "com.dimakids"
+            "StardimaProvider" -> "com.stardima"
             else -> "com.animezid.cloudstream"
         }
 
