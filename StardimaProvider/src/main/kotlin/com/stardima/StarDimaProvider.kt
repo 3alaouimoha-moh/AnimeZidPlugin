@@ -29,6 +29,7 @@ class StarDimaProvider : MainAPI() {
         private const val MOBILE_UA = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
         private val UA_HEADERS = mapOf("user-agent" to MOBILE_UA)
         private val XHR_HEADERS = mapOf("X-Requested-With" to "XMLHttpRequest")
+        private fun stremaHeaders(referer: String) = mapOf("user-agent" to MOBILE_UA, "Referer" to referer)
     }
 
     override val mainPage = mainPageOf(
@@ -329,27 +330,33 @@ class StarDimaProvider : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val html = app.get(embedUrl, headers = UA_HEADERS).text
+        val html = app.get(embedUrl, headers = stremaHeaders(mainUrl)).text
         val kaken = Regex("""window\.kaken\s*=\s*"([^"]+)"""").find(html)?.groupValues?.get(1) ?: return false
         val root = try {
             mapper.readTree(
                 app.post(
                     "$strema/api/",
                     requestBody = kaken.toRequestBody("text/plain; charset=UTF-8".toMediaType()),
-                    headers = mapOf("Referer" to embedUrl)
+                    headers = stremaHeaders(embedUrl)
                 ).text
             )
         } catch (_: Exception) {
             return false
         }
+        if (root.path("status").asText() != "ok") return false
         var found = false
         root["sources"]?.forEach { s ->
             val file = s["file"]?.asText() ?: return@forEach
             val label = s["label"]?.asText()?.ifBlank { "HLS" } ?: "HLS"
             if (file.isNotBlank()) {
+                val finalUrl = try {
+                    app.get(file, headers = UA_HEADERS).url
+                } catch (_: Exception) {
+                    file
+                }
                 callback.invoke(
-                    newExtractorLink(source = name, name = "$name - $label", url = file) {
-                        this.referer = embedUrl
+                    newExtractorLink(source = name, name = "$name - $label", url = finalUrl) {
+                        this.referer = ""
                         this.quality = getQualityFromName(label)
                         this.type = ExtractorLinkType.M3U8
                     }
