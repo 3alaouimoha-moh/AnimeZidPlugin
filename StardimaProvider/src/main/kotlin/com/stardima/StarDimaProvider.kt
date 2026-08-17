@@ -3,9 +3,10 @@ package com.stardima
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.nodes.Element
 import java.net.URLDecoder
-import java.net.URLEncoder
 
 class StarDimaProvider : MainAPI() {
     override var mainUrl = "https://www.stardima.com"
@@ -281,20 +282,21 @@ class StarDimaProvider : MainAPI() {
         streamUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ) {
+    ): Boolean {
         if (streamUrl.contains("$strema/embed2/")) {
             val inner = innerFromStrema(streamUrl)
             if (inner != null) {
-                try {
+                return try {
                     loadExtractor(inner, subtitleCallback, callback)
                 } catch (_: Exception) {
+                    false
                 }
-                return
             }
         }
-        try {
+        return try {
             loadExtractor(streamUrl, subtitleCallback, callback)
         } catch (_: Exception) {
+            false
         }
     }
 
@@ -309,7 +311,7 @@ class StarDimaProvider : MainAPI() {
             mapper.readTree(
                 app.post(
                     "$strema/api/",
-                    requestBody = kaken,
+                    requestBody = kaken.toRequestBody("text/plain; charset=UTF-8".toMediaType()),
                     headers = mapOf("Referer" to embedUrl, "Content-Type" to "text/plain")
                 ).text
             )
