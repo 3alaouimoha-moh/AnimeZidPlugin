@@ -98,6 +98,54 @@ class AnimeZidProvider : MainAPI() {
         return match?.groupValues?.get(1)?.trim() ?: clean
     }
 
+    private suspend fun appendEpisodePages(
+        baseUrl: String,
+        season: Int,
+        fallbackPoster: String,
+        episodes: MutableList<Episode>,
+        seenVids: MutableSet<String>
+    ) {
+        var page = 1
+        while (true) {
+            val pageUrl = if (page == 1) baseUrl else if (baseUrl.contains("?")) "$baseUrl&page=$page" else "$baseUrl?page=$page"
+            val doc = try { app.get(pageUrl).document } catch (_: Exception) { break }
+            val links = doc.select("article.az-card a.az-card__link[href*=\"watch.php?vid=\"]")
+                .ifEmpty { doc.select("a[href*=\"watch.php?vid=\"]") }
+            var added = 0
+            for (epLink in links) {
+                val epHref = epLink.attr("href")
+                val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
+                if (epVid == null || !seenVids.add(epVid)) continue
+                added++
+                val epNum = epLink.selectFirst(".az-badge--episode strong")?.text()?.toIntOrNull()
+                    ?: Regex("""الحلقة\s*(\d+)""").find(
+                        epLink.attr("aria-label").ifEmpty { epLink.attr("title").ifEmpty { epLink.text() } }
+                    )?.groupValues?.get(1)?.toIntOrNull()
+                    ?: seenVids.size
+                val epPoster = epLink.selectFirst("img")?.attr("src") ?: fallbackPoster
+                episodes.add(
+                    newEpisode(fixUrl(epHref)) {
+                        this.name = "الحلقة $epNum"
+                        this.season = season
+                        this.episode = epNum
+                        this.posterUrl = fixUrl(epPoster)
+                    }
+                )
+            }
+
+            var maxShown = page
+            for (link in doc.select("nav.az-pagination a.page-link")) {
+                val href = link.attr("href")
+                if (!href.contains("page=")) continue
+                href.substringAfter("page=").substringBefore("&").toIntOrNull()?.let {
+                    if (it > maxShown) maxShown = it
+                }
+            }
+            if (maxShown <= page || page > 100 || (added == 0 && page > 1)) break
+            page++
+        }
+    }
+
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
 
@@ -146,50 +194,10 @@ class AnimeZidProvider : MainAPI() {
             for (seasonLink in seasonLinks) {
                 val seasonUrl = fixUrl(seasonLink.attr("href"))
                 val season = Regex("""/season/(\d+)""").find(seasonUrl)?.groupValues?.get(1)?.toIntOrNull() ?: 1
-                val seasonDoc = try { app.get(seasonUrl).document } catch (_: Exception) { continue }
-                val episodeLinks = seasonDoc.select("article.az-card a.az-card__link[href*=\"watch.php?vid=\"]")
-                for (epLink in episodeLinks) {
-                    val epHref = epLink.attr("href")
-                    val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
-                    if (epVid == null || !seenVids.add(epVid)) continue
-                    val epNum = epLink.selectFirst(".az-badge--episode strong")?.text()?.toIntOrNull()
-                        ?: Regex("""الحلقة\s*(\d+)""").find(
-                            epLink.attr("aria-label").ifEmpty { epLink.attr("title").ifEmpty { epLink.text() } }
-                        )?.groupValues?.get(1)?.toIntOrNull()
-                        ?: seenVids.size
-                    val epPoster = epLink.selectFirst("img")?.attr("src") ?: poster
-                    episodes.add(
-                        newEpisode(fixUrl(epHref)) {
-                            this.name = "الحلقة $epNum"
-                            this.season = season
-                            this.episode = epNum
-                            this.posterUrl = fixUrl(epPoster)
-                        }
-                    )
-                }
+                appendEpisodePages(seasonUrl, season, poster, episodes, seenVids)
             }
         } else {
-            val episodeLinks = doc.select("article.az-card a.az-card__link[href*=\"watch.php?vid=\"]")
-                .ifEmpty { doc.select("a[href*=\"watch.php?vid=\"]") }
-            for (epLink in episodeLinks) {
-                val epHref = epLink.attr("href")
-                val epVid = Regex("""[?&]vid=([^&]+)""").find(epHref)?.groupValues?.get(1)
-                if (epVid == null || !seenVids.add(epVid)) continue
-                val epNum = epLink.selectFirst(".az-badge--episode strong")?.text()?.toIntOrNull()
-                    ?: Regex("""الحلقة\s*(\d+)""").find(
-                        epLink.attr("aria-label").ifEmpty { epLink.attr("title").ifEmpty { epLink.text() } }
-                    )?.groupValues?.get(1)?.toIntOrNull()
-                    ?: seenVids.size
-                val epPoster = epLink.selectFirst("img")?.attr("src") ?: poster
-                episodes.add(
-                    newEpisode(fixUrl(epHref)) {
-                        this.name = "الحلقة $epNum"
-                        this.season = 1
-                        this.episode = epNum
-                        this.posterUrl = fixUrl(epPoster)
-                    }
-                )
-            }
+            appendEpisodePages(url, 1, poster, episodes, seenVids)
         }
 
         if (episodes.isEmpty()) {
