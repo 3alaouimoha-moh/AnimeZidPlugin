@@ -8,6 +8,8 @@ import org.json.JSONObject
 import org.jsoup.nodes.Element
 import kotlin.math.abs
 
+private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+
 data class IframeResponse(val props: IframeProps)
 data class IframeProps(val streams: StreamsData)
 data class StreamsData(val data: List<StreamItem>)
@@ -230,7 +232,9 @@ class AnimeZidProvider : MainAPI() {
             ?: data.substringAfterLast("/").ifEmpty { return false }
 
         val playUrl = "$mainUrl/play.php?vid=$vid"
-        val playDoc = try { app.get(playUrl).document } catch (_: Exception) { return false }
+        val playDoc = try {
+            app.get(playUrl, headers = mapOf("User-Agent" to DESKTOP_UA)).document
+        } catch (_: Exception) { return false }
         val csrf = playDoc.selectFirst("[data-playback-csrf]")?.attr("data-playback-csrf") ?: return false
         val createUrl = playDoc.selectFirst("[data-playback-create-url]")?.attr("data-playback-create-url")
             ?: "$mainUrl/web-playback/sessions"
@@ -241,6 +245,7 @@ class AnimeZidProvider : MainAPI() {
             "X-Playback-CSRF" to csrf,
             "Origin" to mainUrl,
             "Referer" to playUrl,
+            "User-Agent" to DESKTOP_UA,
         )
 
         val sessionJson = try {
