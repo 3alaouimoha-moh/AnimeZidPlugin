@@ -4,6 +4,7 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import android.util.Log
 import org.json.JSONObject
 import org.jsoup.nodes.Element
 import kotlin.math.abs
@@ -232,10 +233,21 @@ class AnimeZidProvider : MainAPI() {
             ?: data.substringAfterLast("/").ifEmpty { return false }
 
         val playUrl = "$mainUrl/play.php?vid=$vid"
-        val playDoc = try {
-            app.get(playUrl, headers = mapOf("user-agent" to DESKTOP_UA)).document
-        } catch (_: Exception) { return false }
-        val csrf = playDoc.selectFirst("[data-playback-csrf]")?.attr("data-playback-csrf") ?: return false
+        val playResponse = try {
+            app.get(playUrl, headers = mapOf("user-agent" to DESKTOP_UA))
+        } catch (e: Exception) {
+            Log.e("AnimeZid", "play.php request exception: ${e.message}")
+            return false
+        }
+        val decision = playResponse.headers["x-az-play-decision"]
+        val playText = playResponse.text
+        Log.i("AnimeZid", "play.php code=${playResponse.code} decision=$decision csrf=${playText.contains("data-playback-csrf")} protected=${playText.contains("data-playback-protected=\"1\"")} len=${playText.length}")
+        val playDoc = playResponse.document
+        val csrf = playDoc.selectFirst("[data-playback-csrf]")?.attr("data-playback-csrf")
+        if (csrf == null) {
+            Log.e("AnimeZid", "no csrf; decision=$decision; snippet=${playText.take(200)}")
+            return false
+        }
         val createUrl = playDoc.selectFirst("[data-playback-create-url]")?.attr("data-playback-create-url")
             ?: "$mainUrl/web-playback/sessions"
 
@@ -254,7 +266,11 @@ class AnimeZidProvider : MainAPI() {
                 requestBody = """{"content_id":"$vid"}""".toRequestBody(mediaType),
                 headers = jsonHeaders
             ).text
-        } catch (_: Exception) { return false }
+        } catch (e: Exception) {
+            Log.e("AnimeZid", "session POST exception: ${e.message}")
+            return false
+        }
+        Log.i("AnimeZid", "session resp: ${sessionJson.take(300)}")
 
         val session = try { JSONObject(sessionJson) } catch (_: Exception) { return false }
         val sessionId = session.optString("session_id").ifBlank { return false }
