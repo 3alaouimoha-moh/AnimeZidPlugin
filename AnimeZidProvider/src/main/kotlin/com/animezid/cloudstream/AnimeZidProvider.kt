@@ -296,13 +296,21 @@ class AnimeZidProvider : MainAPI() {
                     headers = jsonHeaders,
                     cookies = sessionCookies
                 ).text
-            } catch (_: Exception) { continue }
+            } catch (e: Exception) {
+                Log.e("AnimeZid", "resolve POST exception ($provider): ${e.message}")
+                continue
+            }
             val launch = try { JSONObject(launchUrl).optString("launch_url") } catch (_: Exception) { continue }
-            if (launch.isBlank()) continue
+            if (launch.isBlank()) {
+                Log.e("AnimeZid", "resolve blank launch ($provider): ${launchUrl.take(200)}")
+                continue
+            }
+            Log.i("AnimeZid", "resolve OK ($provider) launch=$launch")
 
-            val launchResponse = try { app.get(launch, referer = playUrl) } catch (_: Exception) { continue }
+            val launchResponse = try { app.get(launch, referer = playUrl) } catch (e: Exception) { continue }
             val pageText = launchResponse.text
             val finalUrl = launchResponse.url
+            Log.i("AnimeZid", "launch GET code=${launchResponse.code} url=$finalUrl len=${pageText.length}")
 
             val version = Regex(""""version":"([^"]+)"""").find(pageText)?.groupValues?.get(1)
             val inertiaUrl = Regex(""""url":"([^"]+)"""").find(pageText)?.groupValues?.get(1)
@@ -322,9 +330,18 @@ class AnimeZidProvider : MainAPI() {
 
                 val jsonText = try {
                     app.get(fixedUrl, headers = inertiaHeaders, referer = launch).text
-                } catch (_: Exception) { continue }
+                } catch (e: Exception) {
+                    Log.e("AnimeZid", "inertia GET exception ($provider): ${e.message}")
+                    continue
+                }
+                Log.i("AnimeZid", "inertia GET len=${jsonText.length} starts=${jsonText.take(120)}")
 
-                val response = AppUtils.tryParseJson<IframeResponse>(jsonText) ?: continue
+                val response = AppUtils.tryParseJson<IframeResponse>(jsonText)
+                if (response == null) {
+                    Log.e("AnimeZid", "inertia parse failed ($provider)")
+                    continue
+                }
+                Log.i("AnimeZid", "inertia streams=${response.props.streams.data.size} ($provider)")
 
                 for (stream in response.props.streams.data) {
                     val height = stream.resolution.substringAfter("x").toIntOrNull()
@@ -364,6 +381,7 @@ class AnimeZidProvider : MainAPI() {
                     subtitleCallback = subtitleCallback,
                     callback = callback,
                 )
+                Log.i("AnimeZid", "no-inertia extract=$extracted url=$finalUrl len=${pageText.length} ($provider)")
                 if (extracted) {
                     found = true
                 } else {
