@@ -259,12 +259,14 @@ class AnimeZidProvider : MainAPI() {
             "Referer" to playUrl,
             "user-agent" to DESKTOP_UA,
         )
+        val sessionCookies = playResponse.cookies
 
         val sessionJson = try {
             app.post(
                 createUrl,
                 requestBody = """{"content_id":"$vid"}""".toRequestBody(mediaType),
-                headers = jsonHeaders
+                headers = jsonHeaders,
+                cookies = sessionCookies
             ).text
         } catch (e: Exception) {
             Log.e("AnimeZid", "session POST exception: ${e.message}")
@@ -290,7 +292,8 @@ class AnimeZidProvider : MainAPI() {
                 app.post(
                     "$createUrl/$sessionId/sources/$srcId/resolve",
                     requestBody = "{}".toRequestBody(mediaType),
-                    headers = jsonHeaders
+                    headers = jsonHeaders,
+                    cookies = sessionCookies
                 ).text
             } catch (_: Exception) { continue }
             val launch = try { JSONObject(launchUrl).optString("launch_url") } catch (_: Exception) { continue }
