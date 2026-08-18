@@ -307,7 +307,7 @@ class AnimeZidProvider : MainAPI() {
             }
             Log.i("AnimeZid", "resolve OK ($provider) launch=$launch")
 
-            val launchResponse = try { app.get(launch, referer = playUrl) } catch (e: Exception) { continue }
+            val launchResponse = try { app.get(launch, referer = playUrl, cookies = sessionCookies) } catch (e: Exception) { continue }
             val pageText = launchResponse.text
             val finalUrl = launchResponse.url
             Log.i("AnimeZid", "launch GET code=${launchResponse.code} url=$finalUrl len=${pageText.length}")
