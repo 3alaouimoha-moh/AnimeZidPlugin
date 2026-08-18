@@ -233,7 +233,7 @@ class AnimeZidProvider : MainAPI() {
 
         val playUrl = "$mainUrl/play.php?vid=$vid"
         val playDoc = try {
-            app.get(playUrl, headers = mapOf("User-Agent" to DESKTOP_UA)).document
+            app.get(playUrl, headers = mapOf("user-agent" to DESKTOP_UA)).document
         } catch (_: Exception) { return false }
         val csrf = playDoc.selectFirst("[data-playback-csrf]")?.attr("data-playback-csrf") ?: return false
         val createUrl = playDoc.selectFirst("[data-playback-create-url]")?.attr("data-playback-create-url")
@@ -245,7 +245,7 @@ class AnimeZidProvider : MainAPI() {
             "X-Playback-CSRF" to csrf,
             "Origin" to mainUrl,
             "Referer" to playUrl,
-            "User-Agent" to DESKTOP_UA,
+            "user-agent" to DESKTOP_UA,
         )
 
         val sessionJson = try {
