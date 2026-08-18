@@ -260,6 +260,7 @@ class AnimeZidProvider : MainAPI() {
             "user-agent" to DESKTOP_UA,
         )
         val sessionCookies = playResponse.cookies
+        Log.i("AnimeZid", "play cookies: ${sessionCookies.keys}")
 
         val sessionJson = try {
             app.post(
