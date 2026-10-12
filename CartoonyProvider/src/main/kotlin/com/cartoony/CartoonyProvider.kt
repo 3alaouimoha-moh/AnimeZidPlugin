@@ -9,6 +9,7 @@ import org.json.JSONObject
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.math.abs
 
 class Cartoony : MainAPI() {
     override var mainUrl = "https://cartoony.net"
@@ -16,6 +17,19 @@ class Cartoony : MainAPI() {
     override var lang = "ar"
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.Cartoon, TvType.Movie)
+
+    override val mainPage = mainPageOf(
+        "recents" to "أحدث الحلقات",
+        "sp-series" to "مسلسلات سبيستون",
+        "sp-movies" to "أفلام سبيستون",
+        "legacy-series" to "مسلسلات مدبلجة",
+        "legacy-movies" to "أفلام مدبلجة",
+        "legacy-stories" to "قصص عالمية",
+        "planet:أكشن" to "أكشن",
+        "planet:كوميدي" to "كوميدي",
+        "planet:مغامرات" to "مغامرات",
+        "planet:رياضة" to "رياضة",
+    )
 
     private val apiHeaders = mapOf(
         "Accept" to "application/json",
@@ -71,6 +85,7 @@ class Cartoony : MainAPI() {
 
     private var spShowsCache: JSONArray? = null
     private var legacyShowsCache: JSONArray? = null
+    private var recentsCache: JSONArray? = null
 
     private suspend fun spShows(): JSONArray {
         spShowsCache?.let { return it }
@@ -119,54 +134,74 @@ class Cartoony : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val list = ArrayList<HomePageList>()
-
-        apiGet("/api/sp/recentEpisodes")?.let { text ->
-            val items = ArrayList<SearchResponse>()
-            val arr = jsonArray(text)
-            for (i in 0 until arr.length()) {
-                val ep = arr.optJSONObject(i) ?: continue
-                val showId = ep.optInt("tv_series_id", 0)
-                if (showId == 0) continue
-                val showName = ep.optString("name").trim()
-                if (showName.isBlank()) continue
-                val epNo = ep.optInt("number", 0)
-                val epTitle = ep.optString("pref").trim()
-                val title = if (epNo > 0) "$showName - الحلقة $epNo" else showName
-                items.add(
-                    newAnimeSearchResponse(title, "sp:$showId", TvType.Cartoon) {
-                        this.posterUrl = ep.optString("cover_full_path").ifBlank { null }
+        val items: List<SearchResponse> = when {
+            request.data == "recents" -> {
+                if (recentsCache == null) {
+                    val arr = jsonArray(apiGet("/api/sp/recentEpisodes"))
+                    if (arr.length() > 0) recentsCache = arr
+                }
+                val arr = recentsCache ?: JSONArray()
+                val out = ArrayList<SearchResponse>()
+                val seenShows = mutableSetOf<Int>()
+                for (i in 0 until arr.length()) {
+                    val ep = arr.optJSONObject(i) ?: continue
+                    val showId = ep.optInt("tv_series_id", 0)
+                    if (showId == 0 || !seenShows.add(showId)) continue
+                    val showName = ep.optString("name").trim()
+                    if (showName.isBlank()) continue
+                    val epNo = ep.optInt("number", 0)
+                    val title = if (epNo > 0) "$showName - الحلقة $epNo" else showName
+                    out.add(
+                        newAnimeSearchResponse(title, "sp:$showId", TvType.Cartoon) {
+                            this.posterUrl = ep.optString("cover_full_path").ifBlank { null }
+                        }
+                    )
+                }
+                out
+            }
+            request.data == "sp-series" || request.data == "sp-movies" -> {
+                val wantMovie = request.data == "sp-movies"
+                val out = ArrayList<SearchResponse>()
+                val sp = spShows()
+                for (i in 0 until sp.length()) {
+                    val o = sp.optJSONObject(i) ?: continue
+                    if ((o.optInt("is_movie", 0) == 1) != wantMovie) continue
+                    spItem(o)?.let { out.add(it) }
+                }
+                out
+            }
+            request.data == "legacy-series" || request.data == "legacy-movies" || request.data == "legacy-stories" -> {
+                val out = ArrayList<SearchResponse>()
+                val legacy = legacyShows()
+                for (i in 0 until legacy.length()) {
+                    val o = legacy.optJSONObject(i) ?: continue
+                    val category = o.optString("category")
+                    val isMovie = category.startsWith("فيلم")
+                    val keep = when (request.data) {
+                        "legacy-movies" -> isMovie
+                        "legacy-stories" -> category.contains("قصص عالمية")
+                        else -> !isMovie
                     }
-                )
-                if (items.size >= 20) break
+                    if (!keep) continue
+                    legacyItem(o)?.let { out.add(it) }
+                }
+                out
             }
-            if (items.isNotEmpty()) list.add(HomePageList("أحدث الحلقات", items))
-        }
-
-        val sp = spShows()
-        val movies = ArrayList<SearchResponse>()
-        val series = ArrayList<SearchResponse>()
-        for (i in 0 until sp.length()) {
-            val item = spItem(sp.optJSONObject(i) ?: continue) ?: continue
-            if (movies.size + series.size >= 40) break
-            if (sp.optJSONObject(i).optInt("is_movie", 0) == 1) {
-                if (movies.size < 20) movies.add(item)
-            } else {
-                if (series.size < 20) series.add(item)
+            request.data.startsWith("planet:") -> {
+                val planet = request.data.removePrefix("planet:")
+                val out = ArrayList<SearchResponse>()
+                val sp = spShows()
+                for (i in 0 until sp.length()) {
+                    val o = sp.optJSONObject(i) ?: continue
+                    if (o.optString("planet_name") != planet) continue
+                    spItem(o)?.let { out.add(it) }
+                }
+                out
             }
+            else -> emptyList()
         }
-        if (movies.isNotEmpty()) list.add(HomePageList("أفلام", movies))
-        if (series.isNotEmpty()) list.add(HomePageList("مسلسلات", series))
-
-        val legacy = legacyShows()
-        val dubbed = ArrayList<SearchResponse>()
-        for (i in 0 until legacy.length()) {
-            if (dubbed.size >= 20) break
-            legacyItem(legacy.optJSONObject(i) ?: continue)?.let { dubbed.add(it) }
-        }
-        if (dubbed.isNotEmpty()) list.add(HomePageList("كرتون مدبلج", dubbed))
-
-        return newHomePageResponse(list)
+        if (items.isEmpty()) throw ErrorLoadingException()
+        return newHomePageResponse(HomePageList(request.name ?: "القائمة", items))
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
@@ -326,17 +361,72 @@ class Cartoony : MainAPI() {
             else -> return false
         }
         if (streamUrl.isBlank()) return false
-        callback.invoke(
-            newExtractorLink(
-                source = name,
-                name = "$name HLS",
-                url = streamUrl,
-                type = ExtractorLinkType.M3U8,
-            ) {
-                this.referer = streamReferer
-                this.quality = Qualities.Unknown.value
+        return emitHlsVariants(streamUrl, callback)
+    }
+
+    private val standardQualities = listOf(144, 240, 360, 480, 720, 1080)
+
+    /** Fetch the master playlist (needs site Referer) and emit one link per quality variant. */
+    private suspend fun emitHlsVariants(
+        masterUrl: String,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        suspend fun emitDirect(url: String): Boolean {
+            callback.invoke(
+                newExtractorLink(
+                    source = name,
+                    name = "$name HLS",
+                    url = url,
+                    type = ExtractorLinkType.M3U8,
+                ) {
+                    this.referer = streamReferer
+                    this.quality = Qualities.Unknown.value
+                }
+            )
+            return true
+        }
+        val text = try {
+            app.get(masterUrl, headers = mapOf("Referer" to streamReferer)).text
+        } catch (_: Exception) { return emitDirect(masterUrl) }
+        if (!text.contains("#EXT-X-STREAM-INF")) return emitDirect(masterUrl)
+        val base = masterUrl.substringBeforeLast("/") + "/"
+        val lines = text.lines()
+        var found = false
+        var i = 0
+        while (i < lines.size) {
+            val line = lines[i].trim()
+            if (line.startsWith("#EXT-X-STREAM-INF")) {
+                val tagName = Regex("NAME=\"([^\"]+)\"").find(line)?.groupValues?.get(1)
+                val height = Regex("RESOLUTION=\\d+x(\\d+)").find(line)?.groupValues?.get(1)?.toIntOrNull()
+                val qNum = tagName?.filter { it.isDigit() }?.toIntOrNull() ?: height
+                var j = i + 1
+                while (j < lines.size && (lines[j].isBlank() || lines[j].trim().startsWith("#"))) j++
+                if (j < lines.size) {
+                    val uri = lines[j].trim()
+                    val full = if (uri.startsWith("http")) uri else base + uri
+                    val label = tagName ?: (if (height != null) "${height}p" else "HLS")
+                    val quality = if (qNum != null) {
+                        standardQualities.minByOrNull { abs(it - qNum) } ?: qNum
+                    } else {
+                        Qualities.Unknown.value
+                    }
+                    callback.invoke(
+                        newExtractorLink(
+                            source = name,
+                            name = "$name $label",
+                            url = full,
+                            type = ExtractorLinkType.M3U8,
+                        ) {
+                            this.referer = streamReferer
+                            this.quality = quality
+                        }
+                    )
+                    found = true
+                }
             }
-        )
+            i++
+        }
+        if (!found) return emitDirect(masterUrl)
         return true
     }
 }
