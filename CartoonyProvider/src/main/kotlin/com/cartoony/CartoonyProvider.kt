@@ -24,6 +24,11 @@ class Cartoony : MainAPI() {
     private val streamReferer = "$mainUrl/"
     private val aesKey = "7annaba3l_loves_crypto_safe_key!".toByteArray(Charsets.UTF_8)
 
+    /** App joins relative data onto mainUrl (load() gets https://cartoony.net/sp:ID) — strip it back. */
+    private fun cleanData(url: String): String {
+        return url.removePrefix("$mainUrl/").removePrefix(mainUrl)
+    }
+
     private fun hexToBytes(hex: String): ByteArray {
         val clean = hex.trim()
         return ByteArray(clean.length / 2) { i ->
@@ -199,8 +204,9 @@ class Cartoony : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val isLegacy = url.startsWith("legacy:")
-        val showId = url.substringAfter(":").toIntOrNull() ?: throw ErrorLoadingException("bad url")
+        val data = cleanData(url)
+        val isLegacy = data.startsWith("legacy:")
+        val showId = data.substringAfter(":").toIntOrNull() ?: throw ErrorLoadingException("bad url")
         val episodes = ArrayList<Episode>()
 
         if (!isLegacy) {
@@ -298,9 +304,10 @@ class Cartoony : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        val clean = cleanData(data)
         val streamUrl = when {
-            data.startsWith("sp-ep:") -> {
-                val parts = data.removePrefix("sp-ep:").split(":")
+            clean.startsWith("sp-ep:") -> {
+                val parts = clean.removePrefix("sp-ep:").split(":")
                 if (parts.size != 2) return false
                 val manifest = apiPost(
                     "/api/sp/episode/link",
@@ -308,8 +315,8 @@ class Cartoony : MainAPI() {
                 ) ?: return false
                 try { JSONObject(manifest).optString("link") } catch (_: Exception) { "" }
             }
-            data.startsWith("legacy-ep:") -> {
-                val parts = data.removePrefix("legacy-ep:").split(":")
+            clean.startsWith("legacy-ep:") -> {
+                val parts = clean.removePrefix("legacy-ep:").split(":")
                 if (parts.size != 2) return false
                 val showId = parts[0].toIntOrNull() ?: return false
                 val epId = parts[1].toIntOrNull() ?: return false
