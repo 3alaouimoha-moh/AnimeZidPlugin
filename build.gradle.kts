@@ -43,6 +43,7 @@ subprojects {
     android {
         namespace = when (project.name) {
             "WitanimeProvider" -> "com.witanime"
+            "CartoonyProvider" -> "com.cartoony"
             "Anime4upProvider" -> "com.anime4up"
             "AnimewitcherProvider" -> "com.animewitcher"
             "DimaToonProvider" -> "com.dima"
