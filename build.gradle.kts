@@ -44,6 +44,7 @@ subprojects {
         namespace = when (project.name) {
             "WitanimeProvider" -> "com.witanime"
             "CartoonyProvider" -> "com.cartoony"
+            "OOAnimeProvider" -> "com.ooanime"
             "Anime4upProvider" -> "com.anime4up"
             "AnimewitcherProvider" -> "com.animewitcher"
             "DimaToonProvider" -> "com.dima"
