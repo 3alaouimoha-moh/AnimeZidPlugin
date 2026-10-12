@@ -2,7 +2,11 @@ package com.ooanime
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
+import kotlin.math.abs
 
 class OOAnime : MainAPI() {
     override var mainUrl = "https://www.ooanime.com"
@@ -33,12 +37,53 @@ class OOAnime : MainAPI() {
         }
     }
 
+    private val standardQualities = listOf(144, 240, 360, 480, 720, 1080)
+
+    /** Follow the "عرض المزيد" chain (POST load_data.php) to collect the full catalog. */
+    private suspend fun fetchListing(url: String): List<SearchResponse> {
+        val items = ArrayList<SearchResponse>()
+        val seen = mutableSetOf<String>()
+        fun collect(doc: org.jsoup.nodes.Document): String? {
+            doc.select(".tcb-product-item").forEach { el ->
+                try {
+                    el.cardResponse()?.let { if (seen.add(it.url)) items.add(it) }
+                } catch (_: Exception) {}
+            }
+            return doc.selectFirst(".show_more")?.attr("id")?.trim()?.takeIf { it.isNotEmpty() }
+        }
+        try {
+            var nextId = collect(app.get(url).document)
+            var guard = 0
+            while (nextId != null && guard < 12) {
+                guard++
+                val chunk = try {
+                    app.post(
+                        "$mainUrl/load_data.php",
+                        requestBody = "id=$nextId".toRequestBody("application/x-www-form-urlencoded".toMediaType()),
+                        headers = mapOf("Referer" to url),
+                    ).text
+                } catch (_: Exception) { break }
+                if (chunk.isBlank()) break
+                val newId = collect(Jsoup.parse(chunk, url))
+                if (newId == null || newId == nextId) break
+                nextId = newId
+            }
+        } catch (_: Exception) {}
+        return items
+    }
+
+    private fun isDirectMedia(url: String): Boolean {
+        val path = url.substringBefore("?").lowercase()
+        return path.endsWith(".mp4") || path.endsWith(".m3u8") ||
+            path.endsWith(".mkv") || path.endsWith(".webm")
+    }
+
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         if (page > 1) return newHomePageResponse(emptyList())
         val url = if (request.data.isBlank()) mainUrl else "$mainUrl/${request.data}"
-        val doc = app.get(url).document
         val list = ArrayList<HomePageList>()
         if (request.data.isBlank()) {
+            val doc = app.get(url).document
             doc.select("div.slidermv").forEach { sec ->
                 val title = sec.selectFirst(".title-home")?.text()?.trim() ?: return@forEach
                 val items = sec.select(".tcb-product-item").mapNotNull { it.cardResponse() }
@@ -46,8 +91,7 @@ class OOAnime : MainAPI() {
                 if (items.isNotEmpty()) list.add(HomePageList(title, items))
             }
         } else {
-            val items = doc.select(".tcb-product-item").mapNotNull { it.cardResponse() }
-                .distinctBy { it.url }
+            val items = fetchListing(url)
             if (items.isEmpty()) throw ErrorLoadingException()
             list.add(HomePageList(request.name ?: "القائمة", items))
         }
@@ -191,13 +235,40 @@ class OOAnime : MainAPI() {
         var found = false
         try {
             val doc = app.get(data).document
-            val frames = doc.select("div.tab-pane[id^=\"pills-s\"] iframe[src]")
-            for (f in frames) {
-                val src = f.attr("abs:src").trim()
-                if (src.isBlank() || "youtube.com" in src || "youtu.be" in src) continue
-                try {
-                    if (loadExtractor(src, data, subtitleCallback, callback)) found = true
-                } catch (_: Exception) {}
+            doc.select("div.tab-pane[id^=\"pills-s\"]").forEach { pane ->
+                if (!pane.attr("id").matches(Regex("pills-s\\d+"))) return@forEach
+                val label = doc.selectFirst("a#${pane.attr("id")}-tab")?.text()?.trim().orEmpty()
+                val qNum = Regex("(\\d{3,4})\\s*p").find(label)?.groupValues?.get(1)?.toIntOrNull()
+                val quality = if (qNum != null) {
+                    standardQualities.minByOrNull { abs(it - qNum) } ?: qNum
+                } else {
+                    Qualities.Unknown.value
+                }
+                pane.select("iframe[src]").forEach { f ->
+                    val src = f.attr("abs:src").trim()
+                    if (src.isBlank() || "youtube.com" in src || "youtu.be" in src) return@forEach
+                    var extracted = false
+                    try {
+                        extracted = loadExtractor(src, data, subtitleCallback, callback)
+                    } catch (_: Exception) {}
+                    if (extracted) {
+                        found = true
+                    } else if (isDirectMedia(src)) {
+                        // Direct file (usually new.ooanime.com MP4): no extractor claims it,
+                        // emit it directly with the server tab's quality label.
+                        callback.invoke(
+                            newExtractorLink(
+                                source = name,
+                                name = "$name $label".trim(),
+                                url = src,
+                            ) {
+                                this.referer = data
+                                this.quality = quality
+                            }
+                        )
+                        found = true
+                    }
+                }
             }
         } catch (_: Exception) {}
         return found
