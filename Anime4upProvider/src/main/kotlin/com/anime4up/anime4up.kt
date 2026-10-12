@@ -1,5 +1,6 @@
 package com.anime4up
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
@@ -14,9 +15,26 @@ class Anime4up : MainAPI() {
     override val hasMainPage = true
 
     private val mapper = jacksonObjectMapper()
+    private val homeUrl = "$mainUrl/home8/"
+
+    // Manual captcha override: resolves through a user-visible WebView so
+    // Cloudflare challenges can be solved manually, falls back to plain GET.
+    private suspend fun fetchDoc(url: String, referer: String? = null) = try {
+        app.get(url, referer = referer, interceptor = WebViewResolver(interceptUrl = Regex.fromLiteral(url))).document
+    } catch (_: Exception) {
+        app.get(url, referer = referer).document
+    }
+
+    private suspend fun fetchText(url: String, referer: String? = null, headers: Map<String, String>? = null): String {
+        return try {
+            app.get(url, headers = headers ?: emptyMap(), referer = referer, interceptor = WebViewResolver(interceptUrl = Regex.fromLiteral(url))).text
+        } catch (_: Exception) {
+            app.get(url, headers = headers ?: emptyMap(), referer = referer).text
+        }
+    }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val doc = app.get(mainUrl).document
+        val doc = fetchDoc(homeUrl)
         val homePageList = ArrayList<HomePageList>()
 
         fun getImageUrl(element: Element): String? {
@@ -69,8 +87,9 @@ class Anime4up : MainAPI() {
 
 
     override suspend fun search(query: String): List<SearchResponse> {
+        // Search only works at the site root (?s= under /home8/ returns 404)
         val url = "$mainUrl/?s=$query"
-        val doc = app.get(url).document
+        val doc = fetchDoc(url)
 
         return doc.select("div.anime-grid div.anime-card-themex").mapNotNull { element ->
 
@@ -92,13 +111,13 @@ class Anime4up : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         var animeUrl = url
-        var animeDoc = app.get(url).document
+        var animeDoc = fetchDoc(url)
 
         if (url.contains("/episode/")) {
             val parentAnimeLink = animeDoc.selectFirst(".anime-page-link a")?.attr("href")
             if (!parentAnimeLink.isNullOrBlank()) {
                 animeUrl = parentAnimeLink
-                animeDoc = app.get(animeUrl).document
+                animeDoc = fetchDoc(animeUrl)
             }
         }
 
@@ -123,7 +142,7 @@ class Anime4up : MainAPI() {
 
         if (!firstEpLink.isNullOrBlank()) {
 
-            val epDoc = app.get(firstEpLink).document
+            val epDoc = fetchDoc(firstEpLink)
             val sidebarEpisodes = epDoc.select("ul.all-episodes-list li a")
 
             if (sidebarEpisodes.isNotEmpty()) {
@@ -167,8 +186,8 @@ class Anime4up : MainAPI() {
         val extractedIframes = mutableListOf<String>()
 
         try {
-            val initialResponse = app.get(url, referer = referer)
-            val soup = initialResponse.document
+            val initialText = fetchText(url, referer)
+            val soup = org.jsoup.Jsoup.parse(initialText, url)
             val version = soup.selectFirst("script[data-page=app]")?.html()?.let {
                 try { mapper.readValue<Map<String, String>>(it)["version"] } catch (_: Exception) { null }
             }
@@ -183,8 +202,8 @@ class Anime4up : MainAPI() {
                 "X-Requested-With" to "XMLHttpRequest"
             )
 
-            val streamResponse = app.get(url, headers = inertiaHeaders, referer = referer)
-            val json = mapper.readTree(streamResponse.text)
+            val streamResponse = fetchText(url, referer, inertiaHeaders)
+            val json = mapper.readTree(streamResponse)
 
             json.get("props")?.get("streams")?.get("data")?.forEach { qualityLevel ->
                 qualityLevel.get("mirrors")?.forEach { mirror ->
@@ -208,7 +227,7 @@ class Anime4up : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val doc = app.get(data).document
+        val doc = fetchDoc(data)
 
         val seenLinks = mutableSetOf<String>()
 
