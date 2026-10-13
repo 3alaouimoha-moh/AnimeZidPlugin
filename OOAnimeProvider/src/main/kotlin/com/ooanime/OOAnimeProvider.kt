@@ -6,7 +6,6 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
-import kotlin.math.abs
 
 class OOAnime : MainAPI() {
     override var mainUrl = "https://www.ooanime.com"
@@ -37,10 +36,10 @@ class OOAnime : MainAPI() {
         }
     }
 
-    private val standardQualities = listOf(144, 240, 360, 480, 720, 1080)
-
-    /** Follow the "عرض المزيد" chain (POST load_data.php) to collect the full catalog. */
-    private suspend fun fetchListing(url: String): List<SearchResponse> {
+    /** Follow the "عرض المزيد" chain to collect the full catalog.
+     * Each listing has its own endpoint: movies→load_data.php,
+     * tvseries→load_series.php, cartoon→load_cartoon.php. */
+    private suspend fun fetchListing(url: String, endpoint: String): List<SearchResponse> {
         val items = ArrayList<SearchResponse>()
         val seen = mutableSetOf<String>()
         fun collect(doc: org.jsoup.nodes.Document): String? {
@@ -58,7 +57,7 @@ class OOAnime : MainAPI() {
                 guard++
                 val chunk = try {
                     app.post(
-                        "$mainUrl/load_data.php",
+                        "$mainUrl/$endpoint",
                         requestBody = "id=$nextId".toRequestBody("application/x-www-form-urlencoded".toMediaType()),
                         headers = mapOf("Referer" to url),
                     ).text
@@ -91,7 +90,18 @@ class OOAnime : MainAPI() {
                 if (items.isNotEmpty()) list.add(HomePageList(title, items))
             }
         } else {
-            val items = fetchListing(url)
+            // The movies listing mixes films with per-episode rows (e.g. "… الحلقة 154");
+            // keep films here (episode rows stay reachable via search).
+            val endpoint = when (request.data) {
+                "tvseries" -> "load_series.php"
+                "cartoon" -> "load_cartoon.php"
+                else -> "load_data.php"
+            }
+            val items = fetchListing(url, endpoint).let {
+                if (request.data == "movies") {
+                    it.filterNot { item -> Regex("الحلقة\\s*\\d").containsMatchIn(item.name) }
+                } else it
+            }
             if (items.isEmpty()) throw ErrorLoadingException()
             list.add(HomePageList(request.name ?: "القائمة", items))
         }
@@ -237,16 +247,13 @@ class OOAnime : MainAPI() {
             val doc = app.get(data).document
             doc.select("div.tab-pane[id^=\"pills-s\"]").forEach { pane ->
                 if (!pane.attr("id").matches(Regex("pills-s\\d+"))) return@forEach
-                val label = doc.selectFirst("a#${pane.attr("id")}-tab")?.text()?.trim().orEmpty()
-                val qNum = Regex("(\\d{3,4})\\s*p").find(label)?.groupValues?.get(1)?.toIntOrNull()
-                val quality = if (qNum != null) {
-                    standardQualities.minByOrNull { abs(it - qNum) } ?: qNum
-                } else {
-                    Qualities.Unknown.value
-                }
-                pane.select("iframe[src]").forEach { f ->
+                // NOTE: the server tabs' quality labels are unreliable (a "1080p" tab
+                // was verified to serve a 854x480 file), so fallback links use
+                // Unknown quality and server-indexed names instead of the label.
+                val servers = pane.select("iframe[src]")
+                servers.forEachIndexed { index, f ->
                     val src = f.attr("abs:src").trim()
-                    if (src.isBlank() || "youtube.com" in src || "youtu.be" in src) return@forEach
+                    if (src.isBlank() || "youtube.com" in src || "youtu.be" in src) return@forEachIndexed
                     var extracted = false
                     try {
                         extracted = loadExtractor(src, data, subtitleCallback, callback)
@@ -255,15 +262,16 @@ class OOAnime : MainAPI() {
                         found = true
                     } else if (isDirectMedia(src)) {
                         // Direct file (usually new.ooanime.com MP4): no extractor claims it,
-                        // emit it directly with the server tab's quality label.
+                        // emit it directly without asserting an unverified quality.
+                        val label = if (servers.size > 1) "$name - سيرفر ${index + 1}" else name
                         callback.invoke(
                             newExtractorLink(
                                 source = name,
-                                name = "$name $label".trim(),
+                                name = label,
                                 url = src,
                             ) {
                                 this.referer = data
-                                this.quality = quality
+                                this.quality = Qualities.Unknown.value
                             }
                         )
                         found = true
